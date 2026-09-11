@@ -15,15 +15,31 @@ interface AIResponse {
   category: string;
 }
 
-// RSS feeds configuration
+// RSS feeds configuration for Dalarna region
 const RSS_FEEDS = [
   {
-    url: process.env.RSS_FEED_1 || 'https://example.com/feed1.xml',
-    sourceName: 'Källa 1',
+    url: 'https://www.dt.se/feed/rss',
+    sourceName: 'Dalarnos Tidning',
   },
   {
-    url: process.env.RSS_FEED_2 || 'https://example.com/feed2.xml',
-    sourceName: 'Källa 2',
+    url: 'https://www.falukuriren.se/feed/rss',
+    sourceName: 'Falun Kuriren',
+  },
+  {
+    url: 'https://www.borlange.se/feed',
+    sourceName: 'Borlänge Stad',
+  },
+  {
+    url: 'https://www.falun.se/feed',
+    sourceName: 'Falun Stad',
+  },
+  {
+    url: 'https://www.ludvika.se/feed',
+    sourceName: 'Ludvika Kommun',
+  },
+  {
+    url: 'https://www.rattvik.se/feed',
+    sourceName: 'Rättvik Kommun',
   },
 ];
 
@@ -49,15 +65,13 @@ Respond ONLY with valid JSON (no markdown, no code blocks):
   "description": "max 2 sentences summary in Swedish",
   "start_time": "ISO-8601 string",
   "location": "string",
-  "category": "string (e.g., Konsert, Teater, Sport, Konferens, Övrigt)"
+  "category": "string (e.g., Konsert, Teater, Sport, Konferens, Utställning, Workshop, Övrigt)"
 }`;
 
   try {
-    let response;
-
     if (process.env.ANTHROPIC_API_KEY) {
       // Use Anthropic Claude
-      response = await axios.post(
+      const response = await axios.post(
         'https://api.anthropic.com/v1/messages',
         {
           model: 'claude-3-haiku-20240307',
@@ -81,7 +95,7 @@ Respond ONLY with valid JSON (no markdown, no code blocks):
       return null;
     } else {
       // Use OpenAI
-      response = await axios.post(
+      const response = await axios.post(
         'https://api.openai.com/v1/chat/completions',
         {
           model: 'gpt-4o-mini',
@@ -116,16 +130,19 @@ async function isDuplicate(sourceUrl: string): Promise<boolean> {
 
 export const ingestRSSFeeds = functions
   .region('europe-west1')
-  .pubsub.schedule('0 2 * * *') // Daily at 2 AM
+  .pubsub.schedule('0 2 * * *') // Daily at 2 AM Stockholm time
   .timeZone('Europe/Stockholm')
   .onRun(async () => {
     let processedCount = 0;
     let itemsSkipped = 0;
+    let feedsProcessed = 0;
+    let feedsFailed = 0;
 
     for (const feed of RSS_FEEDS) {
       try {
         console.log(`Processing feed: ${feed.sourceName} (${feed.url})`);
         const rss = await parser.parseURL(feed.url);
+        feedsProcessed++;
 
         for (const item of rss.items.slice(0, MAX_ITEMS_PER_RUN)) {
           if (processedCount >= MAX_ITEMS_PER_RUN) break;
@@ -171,9 +188,10 @@ export const ingestRSSFeeds = functions
         }
       } catch (error) {
         console.error(`Failed to process feed ${feed.sourceName}: ${error}`);
+        feedsFailed++;
       }
     }
 
-    console.log(`Ingestion complete. Processed: ${processedCount}, Skipped: ${itemsSkipped}`);
-    return { processed: processedCount, skipped: itemsSkipped };
+    console.log(`Ingestion complete. Feeds: ${feedsProcessed}/${RSS_FEEDS.length} success. Events processed: ${processedCount}, Skipped: ${itemsSkipped}`);
+    return { processed: processedCount, skipped: itemsSkipped, feeds: { success: feedsProcessed, failed: feedsFailed } };
   });
