@@ -3,6 +3,7 @@ import * as admin from 'firebase-admin';
 import Parser from 'rss-parser';
 import axios from 'axios';
 import { scrapeBorlange, scrapeFalun, scrapeLudvika, scrapeRattvik, ScrapedEvent } from './html-scraper';
+import { getEnabledSources, updateSourceStatus } from './source-config';
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -16,35 +17,21 @@ interface AIResponse {
   category: string;
 }
 
-// RSS feeds configuration for Dalarna region
-//
-// Dalarnos Tidning (dt.se) and Ludvika Kommun (ludvika.se) are
-// intentionally NOT in this list. dt.se's entire domain now redirects to
-// Bonnier News's unified login/paywall gate (id.bonniernews.se) — every
-// path 301s there, no public RSS survives that. ludvika.se has no
-// discoverable RSS feed at all (checked homepage <link rel="alternate">,
-// full sitemap.xml, and every common /rss, /feed, /rss.xml path — all
-// 404). Re-add them only if/when those sites actually publish a feed
-// again; leaving broken URLs in would just generate a permanent false
-// alarm every run (see check-ingestion.yml).
-const RSS_FEEDS = [
-  {
-    url: 'https://www.falukuriren.se/feeds/feed.xml',
-    sourceName: 'Falun Kuriren',
-  },
-  {
-    url: 'https://www.borlange.se/feed',
-    sourceName: 'Borlänge Stad',
-  },
-  {
-    url: 'https://www.falun.se/rss',
-    sourceName: 'Falun Stad',
-  },
-  {
-    url: 'https://www.rattvik.se/rss',
-    sourceName: 'Rättvik Kommun',
-  },
-];
+// Källkonfiguration (RSS-URL:er, HTML-scraper-mål, enabled/disabled) lever
+// nu i Firestore-collectionen "sources" — se functions/src/source-config.ts
+// och functions/scripts/seed-sources.js för den initiala Dalarna-listan.
+// Detta ersätter den tidigare hårdkodade RSS_FEEDS-konstanten så att en
+// källa kan stängas av eller få ny URL utan kodändring/deploy.
+
+// HTML-scraperna själva är fortfarande bespoke funktioner per sajt (DEL 1:s
+// generiska selector-drivna metod är pausad), så en källas Firestore-id
+// måste peka på en registrerad funktion här.
+const HTML_SCRAPERS: Record<string, () => Promise<ScrapedEvent[]>> = {
+  'borlange-html': scrapeBorlange,
+  'falun-html': scrapeFalun,
+  'ludvika-html': scrapeLudvika,
+  'rattvik-html': scrapeRattvik,
+};
 
 const parser = new Parser();
 const MAX_ITEMS_PER_RUN = 10;
@@ -269,23 +256,32 @@ export async function runHTMLIngestion() {
   const seenUrls = new Set<string>();
   const sourceNamesAttempted = new Set<string>();
 
-  const scraperRuns = await Promise.allSettled([
-    scrapeBorlange(),
-    scrapeFalun(),
-    scrapeLudvika(),
-    scrapeRattvik(),
-  ]);
+  const htmlSources = await getEnabledSources('html');
+
+  const scraperRuns = await Promise.allSettled(
+    htmlSources.map((source) => {
+      const scraper = HTML_SCRAPERS[source.id];
+      if (!scraper) {
+        return Promise.reject(new Error(`No scraper registered for source id "${source.id}"`));
+      }
+      return scraper();
+    })
+  );
 
   const perSourceEvents: ScrapedEvent[][] = [];
-  for (const run of scraperRuns) {
+  for (let i = 0; i < scraperRuns.length; i++) {
+    const run = scraperRuns[i];
+    const source = htmlSources[i];
     if (run.status === 'fulfilled') {
       perSourceEvents.push(run.value);
       for (const event of run.value) sourceNamesAttempted.add(event.sourceName);
+      await updateSourceStatus(source.id, { success: true, eventsFound: run.value.length });
     } else {
-      const msg = `HTML scraper failed: ${run.reason}`;
+      const msg = `HTML scraper failed for ${source.name} (${source.id}): ${run.reason}`;
       console.error(msg);
       errors.push(msg);
-      sourcesFailed.push(String(run.reason));
+      sourcesFailed.push(source.name);
+      await updateSourceStatus(source.id, { success: false, error: String(run.reason) });
     }
   }
 
@@ -391,9 +387,12 @@ async function runIngestion(trigger: 'scheduled' | 'manual') {
     const sourcesFailed: string[] = [];
     const seenUrls = new Set<string>();
 
-    for (const feed of RSS_FEEDS) {
+    const rssSources = await getEnabledSources('rss');
+
+    for (const feed of rssSources) {
+      let eventsFoundThisFeed = 0;
       try {
-        console.log(`Processing feed: ${feed.sourceName} (${feed.url})`);
+        console.log(`Processing feed: ${feed.name} (${feed.url})`);
         const rss = await parser.parseURL(feed.url);
         feedsProcessed++;
 
@@ -424,7 +423,7 @@ async function runIngestion(trigger: 'scheduled' | 'manual') {
             item.pubDate || item.isoDate
           );
           if (!aiResult) {
-            const msg = `AI call failed for "${item.title}" (${feed.sourceName})`;
+            const msg = `AI call failed for "${item.title}" (${feed.name})`;
             console.error(msg);
             errors.push(msg);
             itemsSkipped++;
@@ -449,7 +448,7 @@ async function runIngestion(trigger: 'scheduled' | 'manual') {
           try {
             await db.collection('events').add({
               sourceUrl,
-              sourceName: feed.sourceName,
+              sourceName: feed.name,
               title: aiResult.title,
               description: aiResult.description,
               startTime: admin.firestore.Timestamp.fromDate(startDate),
@@ -459,23 +458,27 @@ async function runIngestion(trigger: 'scheduled' | 'manual') {
             });
             console.log(`Event saved: ${aiResult.title}`);
             processedCount++;
+            eventsFoundThisFeed++;
           } catch (error) {
             const msg = `Failed to save event "${aiResult.title}": ${error}`;
             console.error(msg);
             errors.push(msg);
           }
         }
+
+        await updateSourceStatus(feed.id, { success: true, eventsFound: eventsFoundThisFeed });
       } catch (error) {
-        const msg = `Failed to process feed ${feed.sourceName}: ${error}`;
+        const msg = `Failed to process feed ${feed.name}: ${error}`;
         console.error(msg);
         errors.push(msg);
-        sourcesFailed.push(feed.sourceName);
+        sourcesFailed.push(feed.name);
         feedsFailed++;
+        await updateSourceStatus(feed.id, { success: false, error: String(error) });
       }
     }
 
     const durationMs = Date.now() - startedAt;
-    console.log(`Ingestion complete. Feeds: ${feedsProcessed}/${RSS_FEEDS.length} success. Events processed: ${processedCount}, Skipped: ${itemsSkipped}`);
+    console.log(`Ingestion complete. Feeds: ${feedsProcessed}/${rssSources.length} success. Events processed: ${processedCount}, Skipped: ${itemsSkipped}`);
 
     await logIngestionRun({
       type: 'rss',
@@ -483,7 +486,7 @@ async function runIngestion(trigger: 'scheduled' | 'manual') {
       processed: processedCount,
       skipped: itemsSkipped,
       errors,
-      sources: RSS_FEEDS.map((f) => f.sourceName),
+      sources: rssSources.map((f) => f.name),
       sourcesFailed,
       duration_ms: durationMs,
       api_usage: { calls: aiCallCount },
