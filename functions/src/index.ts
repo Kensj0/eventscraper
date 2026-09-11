@@ -65,14 +65,24 @@ function parseAIJson(raw: string): AIResponse | null {
   }
 }
 
-async function callAI(title: string, description: string): Promise<AIResponse | null> {
+async function callAI(title: string, description: string, referenceDate?: string): Promise<AIResponse | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY;
   if (!apiKey) {
     console.error('No AI API key configured');
     return null;
   }
 
+  // Utan ett referensdatum kan modellen inte lösa upp datum utan angivet år
+  // ("10 september", "Alzheimerdagen") till ett riktigt ISO-datum — och gör
+  // rätt i att vägra gissa år, vilket gav start_time: null/"" på annars
+  // giltiga event. referenceDate är RSS-postens pubDate när den finns,
+  // annars servertiden.
+  const effectiveReferenceDate = referenceDate || new Date().toISOString();
+
   const prompt = `You are an event parser. Analyze the following text and determine if it describes a specific event with a date/time and location.
+
+Reference date (when this text was published/scraped): ${effectiveReferenceDate}
+If the text gives a date without a year (e.g. "10 september", or an annual observance like "Alzheimerdagen"), resolve it to the nearest occurrence on or after the reference date — never leave start_time empty just because the year is implicit.
 
 Title: ${title}
 Description: ${description.substring(0, 500)}
@@ -408,7 +418,11 @@ async function runIngestion(trigger: 'scheduled' | 'manual') {
 
           // Call AI to parse event
           aiCallCount++;
-          const aiResult = await callAI(item.title || '', item.content || item.summary || '');
+          const aiResult = await callAI(
+            item.title || '',
+            item.content || item.summary || '',
+            item.pubDate || item.isoDate
+          );
           if (!aiResult) {
             const msg = `AI call failed for "${item.title}" (${feed.sourceName})`;
             console.error(msg);
