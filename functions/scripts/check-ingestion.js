@@ -19,10 +19,11 @@ function evaluateAnomalies(log) {
   const anomalies = [];
 
   if (log.processed === 0) {
+    // Täcker "allt skippades, inget sparades" — den enda formen av
+    // skipped > processed som faktiskt är onormal. Ett fristående
+    // skipped > processed-test skulle träffa varje frisk körning, eftersom
+    // de flesta RSS-artiklar helt enkelt inte är event.
     anomalies.push('processed === 0 (inga event sparades den här körningen)');
-  }
-  if (log.skipped > log.processed) {
-    anomalies.push(`skipped (${log.skipped}) > processed (${log.processed})`);
   }
   if ((log.errors || []).length > 0) {
     anomalies.push(`${log.errors.length} fel loggade under körningen`);
