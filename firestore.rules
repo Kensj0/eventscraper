@@ -5,5 +5,12 @@ service cloud.firestore {
       allow read: if true;
       allow create, update, delete: if false;
     }
+
+    // Källkonfiguration är bara till för Cloud Functions (admin SDK, som
+    // kringgår dessa regler helt) — ingen klient ska kunna läsa eller
+    // ändra vilka källor som är aktiva.
+    match /sources/{document=**} {
+      allow read, write: if false;
+    }
   }
 }
