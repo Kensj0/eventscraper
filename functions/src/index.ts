@@ -47,6 +47,22 @@ const RSS_FEEDS = [
 const parser = new Parser();
 const MAX_ITEMS_PER_RUN = 10;
 
+// Modeller lyder inte alltid instruktionen "no markdown, no code blocks" —
+// strippa ```json ... ``` -inramning innan vi parsar.
+function parseAIJson(raw: string): AIResponse | null {
+  const cleaned = raw
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/```\s*$/, '')
+    .trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch (error) {
+    console.error('Failed to parse AI response as JSON:', raw);
+    return null;
+  }
+}
+
 async function callAI(title: string, description: string): Promise<AIResponse | null> {
   const apiKey = process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -75,7 +91,7 @@ Respond ONLY with valid JSON (no markdown, no code blocks):
       const response = await axios.post(
         'https://api.anthropic.com/v1/messages',
         {
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-haiku-4-5-20251001',
           max_tokens: 200,
           messages: [{ role: 'user', content: prompt }],
         },
@@ -90,8 +106,7 @@ Respond ONLY with valid JSON (no markdown, no code blocks):
 
       const content = response.data.content[0];
       if (content.type === 'text') {
-        const parsed = JSON.parse(content.text);
-        return parsed;
+        return parseAIJson(content.text);
       }
       return null;
     } else {
@@ -111,13 +126,38 @@ Respond ONLY with valid JSON (no markdown, no code blocks):
         }
       );
 
-      const parsed = JSON.parse(response.data.choices[0].message.content);
-      return parsed;
+      return parseAIJson(response.data.choices[0].message.content);
     }
   } catch (error) {
     console.error('AI API call failed:', error);
     return null;
   }
+}
+
+// AI:n returnerar inte alltid ett giltigt ISO-8601-värde för start_time.
+// new Date(...) av en trasig sträng ger inte ett fel — bara ett "Invalid
+// Date" som tyst blir 1970-01-01 när det skrivs till Firestore. Validera
+// innan vi sparar istället för att låta skräpdatum in i databasen.
+function parseValidDate(value: unknown): Date | null {
+  // new Date(null) / new Date(undefined) coerce to epoch instead of
+  // NaN, so a missing/null start_time from the AI would otherwise slip
+  // past an isNaN check and silently save as 1970-01-01.
+  if (typeof value !== 'string' || value.trim() === '') return null;
+  const date = new Date(value);
+  return isNaN(date.getTime()) ? null : date;
+}
+
+// Round-robin genom flera listor så en källa med många träffar inte äter upp
+// hela MAX_ITEMS_PER_RUN innan de andra källorna får bidra alls.
+function interleave<T>(lists: T[][]): T[] {
+  const result: T[] = [];
+  const maxLen = Math.max(0, ...lists.map((l) => l.length));
+  for (let i = 0; i < maxLen; i++) {
+    for (const list of lists) {
+      if (i < list.length) result.push(list[i]);
+    }
+  }
+  return result;
 }
 
 async function isDuplicate(sourceUrl: string): Promise<boolean> {
@@ -168,7 +208,9 @@ export const scrapeHTMLSources = functions
   });
 
 // Shared HTML-scraping ingestion logic — samma AI-parsing/dedup-pipeline som RSS.
-async function runHTMLIngestion() {
+// Exporteras (utöver att användas av scrapeHTMLSources ovan) så den kan
+// testas direkt med ett litet Node-skript utan att gå via functions-emulatorn.
+export async function runHTMLIngestion() {
   let processedCount = 0;
   let itemsSkipped = 0;
   const sourcesFailed: string[] = [];
@@ -180,15 +222,20 @@ async function runHTMLIngestion() {
     scrapeRattvik(),
   ]);
 
-  const scrapedEvents: ScrapedEvent[] = [];
+  const perSourceEvents: ScrapedEvent[][] = [];
   for (const run of scraperRuns) {
     if (run.status === 'fulfilled') {
-      scrapedEvents.push(...run.value);
+      perSourceEvents.push(run.value);
     } else {
       console.error('HTML scraper failed:', run.reason);
       sourcesFailed.push(String(run.reason));
     }
   }
+
+  // Varva källorna istället för att lägga dem efter varandra — annars äter
+  // Borlänge+Falun (16 event tillsammans) upp hela MAX_ITEMS_PER_RUN innan
+  // Ludvika eller Rättvik någonsin hinner bidra med ett enda event.
+  const scrapedEvents = interleave(perSourceEvents);
 
   for (const event of scrapedEvents.slice(0, MAX_ITEMS_PER_RUN)) {
     if (!event.url) {
@@ -213,13 +260,20 @@ async function runHTMLIngestion() {
       continue;
     }
 
+    const startDate = parseValidDate(aiResult.start_time);
+    if (!startDate) {
+      console.warn(`Invalid start_time from AI, skipping: ${event.title} ("${aiResult.start_time}")`);
+      itemsSkipped++;
+      continue;
+    }
+
     try {
       await db.collection('events').add({
         sourceUrl: event.url,
         sourceName: event.sourceName,
         title: aiResult.title,
         description: aiResult.description,
-        startTime: admin.firestore.Timestamp.fromDate(new Date(aiResult.start_time)),
+        startTime: admin.firestore.Timestamp.fromDate(startDate),
         location: aiResult.location,
         category: aiResult.category,
         createdAt: admin.firestore.Timestamp.now(),
@@ -274,6 +328,13 @@ async function runIngestion() {
             continue;
           }
 
+          const startDate = parseValidDate(aiResult.start_time);
+          if (!startDate) {
+            console.warn(`Invalid start_time from AI, skipping: ${item.title} ("${aiResult.start_time}")`);
+            itemsSkipped++;
+            continue;
+          }
+
           // Save to Firestore
           try {
             await db.collection('events').add({
@@ -281,7 +342,7 @@ async function runIngestion() {
               sourceName: feed.sourceName,
               title: aiResult.title,
               description: aiResult.description,
-              startTime: admin.firestore.Timestamp.fromDate(new Date(aiResult.start_time)),
+              startTime: admin.firestore.Timestamp.fromDate(startDate),
               location: aiResult.location,
               category: aiResult.category,
               createdAt: admin.firestore.Timestamp.now(),
