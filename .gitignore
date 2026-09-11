@@ -1,7 +1,5 @@
 # Dependencies
 node_modules
-package-lock.json
-yarn.lock
 
 # Next.js
 .next
@@ -11,6 +9,8 @@ build
 # Environment
 .env.local
 .env.*.local
+*_API_KEY.txt
+*_TOKEN.txt
 
 # IDE
 .vscode
