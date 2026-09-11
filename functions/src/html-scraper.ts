@@ -160,12 +160,13 @@ export async function scrapeBorlange(): Promise<ScrapedEvent[]> {
         .flatMap((f: any) => (Array.isArray(f.value) ? f.value : [f.value]))
         .filter(Boolean)
         .join(', ');
+      const desc = String((item as any).desc || '').trim();
 
       if (!title || !uri) continue;
 
       events.push({
         title,
-        description: String((item as any).desc || '').trim(),
+        description: categories ? `${desc}\nKategori: ${categories}` : desc,
         startTime: isoFull ? toStockholmISOString(isoFull) : '',
         location: 'Borlänge', // exakt plats/adress finns inte i listdatan
         url: new URL(uri, baseUrl).href,
