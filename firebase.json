@@ -1,0 +1,26 @@
+{
+  "hosting": {
+    "public": ".next/standalone/public",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ],
+    "cleanUrls": true,
+    "trailingSlashBehavior": "REMOVE"
+  },
+  "functions": {
+    "source": "functions",
+    "runtime": "nodejs20",
+    "codebase": "default"
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  }
+}
