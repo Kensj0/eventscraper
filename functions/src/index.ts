@@ -2,6 +2,7 @@ import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import Parser from 'rss-parser';
 import axios from 'axios';
+import { scrapeBorlange, scrapeFalun, scrapeLudvika, scrapeRattvik, ScrapedEvent } from './html-scraper';
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -151,6 +152,90 @@ export const ingestRSSFeedsManual = functions
     const result = await runIngestion();
     res.status(200).json(result);
   });
+
+// HTTP trigger for manual testing of the HTML scrapers
+export const scrapeHTMLSources = functions
+  .region('europe-west1')
+  .https.onRequest(async (req, res) => {
+    const key = req.query.key || req.body.key;
+    if (key !== process.env.INGEST_SECRET_KEY && key !== 'test-local') {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const result = await runHTMLIngestion();
+    res.status(200).json(result);
+  });
+
+// Shared HTML-scraping ingestion logic — samma AI-parsing/dedup-pipeline som RSS.
+async function runHTMLIngestion() {
+  let processedCount = 0;
+  let itemsSkipped = 0;
+  const sourcesFailed: string[] = [];
+
+  const scraperRuns = await Promise.allSettled([
+    scrapeBorlange(),
+    scrapeFalun(),
+    scrapeLudvika(),
+    scrapeRattvik(),
+  ]);
+
+  const scrapedEvents: ScrapedEvent[] = [];
+  for (const run of scraperRuns) {
+    if (run.status === 'fulfilled') {
+      scrapedEvents.push(...run.value);
+    } else {
+      console.error('HTML scraper failed:', run.reason);
+      sourcesFailed.push(String(run.reason));
+    }
+  }
+
+  for (const event of scrapedEvents.slice(0, MAX_ITEMS_PER_RUN)) {
+    if (!event.url) {
+      itemsSkipped++;
+      continue;
+    }
+
+    if (await isDuplicate(event.url)) {
+      console.log(`Duplicate skipped: ${event.url}`);
+      itemsSkipped++;
+      continue;
+    }
+
+    const descriptionWithHints = event.startTime
+      ? `${event.description}\nDatum/tid: ${event.startTime}\nPlats: ${event.location}`
+      : `${event.description}\nPlats: ${event.location}`;
+
+    const aiResult = await callAI(event.title, descriptionWithHints);
+    if (!aiResult || !aiResult.is_event) {
+      console.log(`Not an event: ${event.title}`);
+      itemsSkipped++;
+      continue;
+    }
+
+    try {
+      await db.collection('events').add({
+        sourceUrl: event.url,
+        sourceName: event.sourceName,
+        title: aiResult.title,
+        description: aiResult.description,
+        startTime: admin.firestore.Timestamp.fromDate(new Date(aiResult.start_time)),
+        location: aiResult.location,
+        category: aiResult.category,
+        createdAt: admin.firestore.Timestamp.now(),
+      });
+      console.log(`Event saved: ${aiResult.title}`);
+      processedCount++;
+    } catch (error) {
+      console.error(`Failed to save event: ${error}`);
+    }
+  }
+
+  console.log(
+    `HTML ingestion complete. Events processed: ${processedCount}, Skipped: ${itemsSkipped}, Failed sources: ${sourcesFailed.length}`
+  );
+  return { processed: processedCount, skipped: itemsSkipped, sourcesFailed };
+}
 
 // Shared ingestion logic
 async function runIngestion() {

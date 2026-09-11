@@ -26,6 +26,7 @@ Thumbs.db
 # Firebase
 .firebase
 .firebaserc
+functions/lib
 
 # Logs
 *.log
