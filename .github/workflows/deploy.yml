@@ -61,6 +61,16 @@ jobs:
           RSS_FEED_2=${{ secrets.RSS_FEED_2 }}
           EOF
 
+      - name: Skapa functions/.env från GitHub Secrets
+        run: |
+          cat > functions/.env << EOF
+          ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          INGEST_SECRET_KEY=${{ secrets.INGEST_SECRET_KEY }}
+          RSS_FEED_1=${{ secrets.RSS_FEED_1 }}
+          RSS_FEED_2=${{ secrets.RSS_FEED_2 }}
+          EOF
+
       - name: Bygg frontend (statisk export till .next/standalone)
         if: contains(github.event.inputs.target, 'hosting')
         run: npm run build
