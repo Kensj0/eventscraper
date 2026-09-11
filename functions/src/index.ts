@@ -128,11 +128,32 @@ async function isDuplicate(sourceUrl: string): Promise<boolean> {
   return !snapshot.empty;
 }
 
+// Scheduled trigger (daily at 2 AM)
 export const ingestRSSFeeds = functions
   .region('europe-west1')
   .pubsub.schedule('0 2 * * *') // Daily at 2 AM Stockholm time
   .timeZone('Europe/Stockholm')
   .onRun(async () => {
+    return await runIngestion();
+  });
+
+// HTTP trigger for manual testing
+export const ingestRSSFeedsManual = functions
+  .region('europe-west1')
+  .https.onRequest(async (req, res) => {
+    // Basic auth check (use ?key=your-secret-key)
+    const key = req.query.key || req.body.key;
+    if (key !== process.env.INGEST_SECRET_KEY && key !== 'test-local') {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const result = await runIngestion();
+    res.status(200).json(result);
+  });
+
+// Shared ingestion logic
+async function runIngestion() {
     let processedCount = 0;
     let itemsSkipped = 0;
     let feedsProcessed = 0;
@@ -194,4 +215,4 @@ export const ingestRSSFeeds = functions
 
     console.log(`Ingestion complete. Feeds: ${feedsProcessed}/${RSS_FEEDS.length} success. Events processed: ${processedCount}, Skipped: ${itemsSkipped}`);
     return { processed: processedCount, skipped: itemsSkipped, feeds: { success: feedsProcessed, failed: feedsFailed } };
-  });
+}
