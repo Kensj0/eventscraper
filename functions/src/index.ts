@@ -169,18 +169,53 @@ async function isDuplicate(sourceUrl: string): Promise<boolean> {
   return !snapshot.empty;
 }
 
+interface IngestionLogData {
+  type: 'rss' | 'html';
+  trigger: 'scheduled' | 'manual';
+  processed: number;
+  skipped: number;
+  errors: string[];
+  sources: string[];
+  sourcesFailed: string[];
+  duration_ms: number;
+  api_usage: { calls: number };
+  duplicateUrlsWithinRun: number;
+}
+
+// Skriver en post per körning till ingestion_logs, för monitoring/alerting
+// (se .github/workflows/check-ingestion.yml). Får aldrig krascha själva
+// ingestion-körningen om skrivningen misslyckas.
+async function logIngestionRun(log: IngestionLogData): Promise<void> {
+  try {
+    await db.collection('ingestion_logs').add({
+      ...log,
+      timestamp: admin.firestore.Timestamp.now(),
+    });
+  } catch (error) {
+    console.error('Failed to write ingestion log:', error);
+  }
+}
+
+// Ingestion kan ta ett tag med 10 sekventiella AI-anrop — default Cloud
+// Functions-timeout är 60s, vilket ligger under vår egen 5-minuters
+// anomali-gräns (se check-ingestion.yml). Höj till 300s så en långsam men
+// frisk körning inte hinner dödas av plattformen innan den ens loggas.
+const INGESTION_RUNTIME_OPTS = { timeoutSeconds: 300 };
+
 // Scheduled trigger (daily at 2 AM)
 export const ingestRSSFeeds = functions
   .region('europe-west1')
+  .runWith(INGESTION_RUNTIME_OPTS)
   .pubsub.schedule('0 2 * * *') // Daily at 2 AM Stockholm time
   .timeZone('Europe/Stockholm')
   .onRun(async () => {
-    return await runIngestion();
+    return await runIngestion('scheduled');
   });
 
 // HTTP trigger for manual testing
 export const ingestRSSFeedsManual = functions
   .region('europe-west1')
+  .runWith(INGESTION_RUNTIME_OPTS)
   .https.onRequest(async (req, res) => {
     // Basic auth check (use ?key=your-secret-key)
     const key = req.query.key || req.body.key;
@@ -189,13 +224,14 @@ export const ingestRSSFeedsManual = functions
       return;
     }
 
-    const result = await runIngestion();
+    const result = await runIngestion('manual');
     res.status(200).json(result);
   });
 
 // HTTP trigger for manual testing of the HTML scrapers
 export const scrapeHTMLSources = functions
   .region('europe-west1')
+  .runWith(INGESTION_RUNTIME_OPTS)
   .https.onRequest(async (req, res) => {
     const key = req.query.key || req.body.key;
     if (key !== process.env.INGEST_SECRET_KEY && key !== 'test-local') {
@@ -211,9 +247,15 @@ export const scrapeHTMLSources = functions
 // Exporteras (utöver att användas av scrapeHTMLSources ovan) så den kan
 // testas direkt med ett litet Node-skript utan att gå via functions-emulatorn.
 export async function runHTMLIngestion() {
+  const startedAt = Date.now();
   let processedCount = 0;
   let itemsSkipped = 0;
+  let aiCallCount = 0;
+  let duplicateUrlsWithinRun = 0;
+  const errors: string[] = [];
   const sourcesFailed: string[] = [];
+  const seenUrls = new Set<string>();
+  const sourceNamesAttempted = new Set<string>();
 
   const scraperRuns = await Promise.allSettled([
     scrapeBorlange(),
@@ -226,8 +268,11 @@ export async function runHTMLIngestion() {
   for (const run of scraperRuns) {
     if (run.status === 'fulfilled') {
       perSourceEvents.push(run.value);
+      for (const event of run.value) sourceNamesAttempted.add(event.sourceName);
     } else {
-      console.error('HTML scraper failed:', run.reason);
+      const msg = `HTML scraper failed: ${run.reason}`;
+      console.error(msg);
+      errors.push(msg);
       sourcesFailed.push(String(run.reason));
     }
   }
@@ -243,6 +288,9 @@ export async function runHTMLIngestion() {
       continue;
     }
 
+    if (seenUrls.has(event.url)) duplicateUrlsWithinRun++;
+    seenUrls.add(event.url);
+
     if (await isDuplicate(event.url)) {
       console.log(`Duplicate skipped: ${event.url}`);
       itemsSkipped++;
@@ -253,8 +301,16 @@ export async function runHTMLIngestion() {
       ? `${event.description}\nDatum/tid: ${event.startTime}\nPlats: ${event.location}`
       : `${event.description}\nPlats: ${event.location}`;
 
+    aiCallCount++;
     const aiResult = await callAI(event.title, descriptionWithHints);
-    if (!aiResult || !aiResult.is_event) {
+    if (!aiResult) {
+      const msg = `AI call failed for "${event.title}" (${event.sourceName})`;
+      console.error(msg);
+      errors.push(msg);
+      itemsSkipped++;
+      continue;
+    }
+    if (!aiResult.is_event) {
       console.log(`Not an event: ${event.title}`);
       itemsSkipped++;
       continue;
@@ -262,7 +318,9 @@ export async function runHTMLIngestion() {
 
     const startDate = parseValidDate(aiResult.start_time);
     if (!startDate) {
-      console.warn(`Invalid start_time from AI, skipping: ${event.title} ("${aiResult.start_time}")`);
+      const msg = `Invalid start_time from AI for "${event.title}": "${aiResult.start_time}"`;
+      console.warn(msg);
+      errors.push(msg);
       itemsSkipped++;
       continue;
     }
@@ -281,22 +339,45 @@ export async function runHTMLIngestion() {
       console.log(`Event saved: ${aiResult.title}`);
       processedCount++;
     } catch (error) {
-      console.error(`Failed to save event: ${error}`);
+      const msg = `Failed to save event "${aiResult.title}": ${error}`;
+      console.error(msg);
+      errors.push(msg);
     }
   }
 
+  const durationMs = Date.now() - startedAt;
   console.log(
     `HTML ingestion complete. Events processed: ${processedCount}, Skipped: ${itemsSkipped}, Failed sources: ${sourcesFailed.length}`
   );
+
+  await logIngestionRun({
+    type: 'html',
+    trigger: 'manual',
+    processed: processedCount,
+    skipped: itemsSkipped,
+    errors,
+    sources: Array.from(sourceNamesAttempted),
+    sourcesFailed,
+    duration_ms: durationMs,
+    api_usage: { calls: aiCallCount },
+    duplicateUrlsWithinRun,
+  });
+
   return { processed: processedCount, skipped: itemsSkipped, sourcesFailed };
 }
 
 // Shared ingestion logic
-async function runIngestion() {
+async function runIngestion(trigger: 'scheduled' | 'manual') {
+    const startedAt = Date.now();
     let processedCount = 0;
     let itemsSkipped = 0;
     let feedsProcessed = 0;
     let feedsFailed = 0;
+    let aiCallCount = 0;
+    let duplicateUrlsWithinRun = 0;
+    const errors: string[] = [];
+    const sourcesFailed: string[] = [];
+    const seenUrls = new Set<string>();
 
     for (const feed of RSS_FEEDS) {
       try {
@@ -313,6 +394,9 @@ async function runIngestion() {
             continue;
           }
 
+          if (seenUrls.has(sourceUrl)) duplicateUrlsWithinRun++;
+          seenUrls.add(sourceUrl);
+
           // Check for duplicate
           if (await isDuplicate(sourceUrl)) {
             console.log(`Duplicate skipped: ${sourceUrl}`);
@@ -321,8 +405,16 @@ async function runIngestion() {
           }
 
           // Call AI to parse event
+          aiCallCount++;
           const aiResult = await callAI(item.title || '', item.content || item.summary || '');
-          if (!aiResult || !aiResult.is_event) {
+          if (!aiResult) {
+            const msg = `AI call failed for "${item.title}" (${feed.sourceName})`;
+            console.error(msg);
+            errors.push(msg);
+            itemsSkipped++;
+            continue;
+          }
+          if (!aiResult.is_event) {
             console.log(`Not an event: ${item.title}`);
             itemsSkipped++;
             continue;
@@ -330,7 +422,9 @@ async function runIngestion() {
 
           const startDate = parseValidDate(aiResult.start_time);
           if (!startDate) {
-            console.warn(`Invalid start_time from AI, skipping: ${item.title} ("${aiResult.start_time}")`);
+            const msg = `Invalid start_time from AI for "${item.title}": "${aiResult.start_time}"`;
+            console.warn(msg);
+            errors.push(msg);
             itemsSkipped++;
             continue;
           }
@@ -350,15 +444,35 @@ async function runIngestion() {
             console.log(`Event saved: ${aiResult.title}`);
             processedCount++;
           } catch (error) {
-            console.error(`Failed to save event: ${error}`);
+            const msg = `Failed to save event "${aiResult.title}": ${error}`;
+            console.error(msg);
+            errors.push(msg);
           }
         }
       } catch (error) {
-        console.error(`Failed to process feed ${feed.sourceName}: ${error}`);
+        const msg = `Failed to process feed ${feed.sourceName}: ${error}`;
+        console.error(msg);
+        errors.push(msg);
+        sourcesFailed.push(feed.sourceName);
         feedsFailed++;
       }
     }
 
+    const durationMs = Date.now() - startedAt;
     console.log(`Ingestion complete. Feeds: ${feedsProcessed}/${RSS_FEEDS.length} success. Events processed: ${processedCount}, Skipped: ${itemsSkipped}`);
+
+    await logIngestionRun({
+      type: 'rss',
+      trigger,
+      processed: processedCount,
+      skipped: itemsSkipped,
+      errors,
+      sources: RSS_FEEDS.map((f) => f.sourceName),
+      sourcesFailed,
+      duration_ms: durationMs,
+      api_usage: { calls: aiCallCount },
+      duplicateUrlsWithinRun,
+    });
+
     return { processed: processedCount, skipped: itemsSkipped, feeds: { success: feedsProcessed, failed: feedsFailed } };
 }
