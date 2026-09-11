@@ -72,7 +72,7 @@ jobs:
         run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > /tmp/gcp-key.json
 
       - name: Deploya
-        run: firebase deploy --only ${{ github.event.inputs.target }} --non-interactive
+        run: firebase deploy --only ${{ github.event.inputs.target }} --project "${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}" --non-interactive
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
           FIREBASE_SUPPRESS_REGION_WARNING: "true"
