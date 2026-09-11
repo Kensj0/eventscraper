@@ -17,13 +17,19 @@ interface AIResponse {
 }
 
 // RSS feeds configuration for Dalarna region
+//
+// Dalarnos Tidning (dt.se) and Ludvika Kommun (ludvika.se) are
+// intentionally NOT in this list. dt.se's entire domain now redirects to
+// Bonnier News's unified login/paywall gate (id.bonniernews.se) — every
+// path 301s there, no public RSS survives that. ludvika.se has no
+// discoverable RSS feed at all (checked homepage <link rel="alternate">,
+// full sitemap.xml, and every common /rss, /feed, /rss.xml path — all
+// 404). Re-add them only if/when those sites actually publish a feed
+// again; leaving broken URLs in would just generate a permanent false
+// alarm every run (see check-ingestion.yml).
 const RSS_FEEDS = [
   {
-    url: 'https://www.dt.se/feed/rss',
-    sourceName: 'Dalarnos Tidning',
-  },
-  {
-    url: 'https://www.falukuriren.se/feed/rss',
+    url: 'https://www.falukuriren.se/feeds/feed.xml',
     sourceName: 'Falun Kuriren',
   },
   {
@@ -31,15 +37,11 @@ const RSS_FEEDS = [
     sourceName: 'Borlänge Stad',
   },
   {
-    url: 'https://www.falun.se/feed',
+    url: 'https://www.falun.se/rss',
     sourceName: 'Falun Stad',
   },
   {
-    url: 'https://www.ludvika.se/feed',
-    sourceName: 'Ludvika Kommun',
-  },
-  {
-    url: 'https://www.rattvik.se/feed',
+    url: 'https://www.rattvik.se/rss',
     sourceName: 'Rättvik Kommun',
   },
 ];
