@@ -156,6 +156,45 @@ async function harvestSvenskaKyrkanHeritagePages(database: RegionDatabase): Prom
   return results;
 }
 
+// ---------------------------------------------------------------------------
+// RF-SISU Dalarna, studieförbunden (SV/ABF/Studiefrämjandet) och
+// Dalabiblioteken — undersökta men INTE riktiga "en databas med många
+// organisationer" på det sätt Skolverket/Svenska kyrkans UnitAPI är:
+//
+// - RF-SISU Dalarna har inte en publik medlemsföreningslista på sin egen
+//   sajt (kollat rfsisu.se/distrikt/dalarna och sökt efter röstlängd/
+//   årsmöteshandlingar). Den nationella "Hitta inom idrottsrörelsen" HAR de
+//   ~900 föreningarna, men är ett rent JS-sökformulär utan API (se
+//   region-databases.ts, scrapable:'no-js-rendered') — inte löst här.
+// - SV Dalarna/ABF Dalarna/Studiefrämjandet är själva EN organisation som
+//   kör kurser/cirklar i alla 15 kommuner, inte en katalog över andra
+//   föreningar (bekräftat: sv.se/avdelningar/sv-dalarna listar egna
+//   evenemang, ingen medlemslista).
+// - Dalabiblioteken är en delad LÅNTAGARPORTAL (Axiell Arena, BankID-inlogg
+//   för kontofunktioner) för de 15 kommunbibliotekens gemensamma katalog —
+//   inte en sida som länkar ut till 15 separata bibliotekswebbplatser.
+//
+// Den ärliga harvesten för dessa fem är därför "databasen ÄR sin egen enda
+// organisation" — lägg till den direkt i candidate-sources istället för att
+// låtsas extrahera en lista som inte finns.
+// ---------------------------------------------------------------------------
+function harvestSelf(category: CandidateCategory): Harvester {
+  return async (database: RegionDatabase): Promise<HarvestedOrg[]> => [
+    {
+      id: database.id,
+      name: database.name,
+      url: database.url,
+      category,
+      discoveredFrom: `${database.name} — databasen visade sig vara en enskild organisation, inte en katalog över flera (se org-harvesters.ts)`,
+    },
+  ];
+}
+
 export const HARVESTERS: Record<string, Harvester> = {
   'skolverket-skolenhetsregistret': harvestSkolverket,
+  'rf-sisu-dalarna': harvestSelf('ideell-organisation'),
+  'sv-dalarna': harvestSelf('ideell-organisation'),
+  'abf-dalarna': harvestSelf('ideell-organisation'),
+  'studieframjandet': harvestSelf('ideell-organisation'),
+  'dalabiblioteken': harvestSelf('bibliotek'),
 };
