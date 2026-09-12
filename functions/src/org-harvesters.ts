@@ -12,8 +12,9 @@ export interface HarvestedOrg {
   id: string;
   name: string;
   url: string;
-  category: CandidateCategory;
+  type: CandidateCategory;
   discoveredFrom: string;
+  externalIds?: { ownerId?: string; unitId?: string; [key: string]: string | undefined };
 }
 
 export type Harvester = (database: RegionDatabase) => Promise<HarvestedOrg[]>;
@@ -89,7 +90,7 @@ async function harvestSkolverket(database: RegionDatabase): Promise<HarvestedOrg
             id: `skola-${unit.schoolUnitCode}`,
             name: detail.displayName,
             url: detail.url,
-            category: 'skola',
+            type: 'skola',
             discoveredFrom: `${database.name} (kommun: ${municipalityName})`,
           });
           foundHere++;
@@ -104,20 +105,72 @@ async function harvestSkolverket(database: RegionDatabase): Promise<HarvestedOrg
 }
 
 // ---------------------------------------------------------------------------
-// Svenska kyrkan — AVSIKTLIGT INTE registrerad i HARVESTERS nedan, se
-// harvestSvenskaKyrkanHeritagePages() längre ner för varför. Två öppna
-// frågor kvar innan den här databasen är värd att koppla in:
+// Svenska kyrkan — UnitAPI ("Enheter V2", api.svenskakyrkan.se/externwebb),
+// nu inkopplad. Kenny registrerade konto och delade nyckeln
+// (SVENSKA_KYRKAN_UNIT_API_KEY); OBS annan auth-mekanism än CalendarAPI:s
+// Azure APIM-nyckel — den här skickas som header `SvkAuthSvc-ApiKey`, inte
+// `Ocp-Apim-Subscription-Key` (verifierat live mot båda API:erna).
 //
-// 1. Den riktiga UnitAPI:n/kalender-API:n (api.svenskakyrkan.se) har
-//    gudstjänst-/aktivitetsdata men kräver ett registrerat konto +
-//    API-nyckel — inte gjort här, det är ett "måste signera något"-beslut
-//    för Kenny, inte något att tyst skapa.
-// 2. Alternativet utan nyckel (crawla svenskakyrkan.se:s sitemap-index,
-//    ~1203 per-pastorat-sitemaps, för att hitta varje pastorats egna
-//    hemsida, t.ex. svenskakyrkan.se/falun) är tekniskt möjligt men mycket
-//    tyngre än de andra harvestrarna (hundratals HTTP-anrop bara för att
-//    hitta ~15-20 Dalarna-pastorat) — inte byggt än, se rapport.
+// OData-API:t (/api-v2/odata/units) har `localAuthorityCode` som exakt
+// motsvarar SCB-kommunkoderna i DALARNA_MUNICIPALITIES ovan (bekräftat live,
+// t.ex. '2081' = Borlänge) och en `activatedCalendar`-flagga som säger om
+// enheten faktiskt publicerar events — filtrerar bort de ~90% av
+// församlingarna som inte har det istället för att gissa. Endast 21 enheter
+// i hela Dalarna hade activatedCalendar=true vid verifieringstillfället.
+// `unitId` är samma id som CalendarAPI:s `owner_id`-filter förväntar sig
+// (se calendarapi.json, /event/search) — det är länken mellan de två API:erna.
 // ---------------------------------------------------------------------------
+const SVENSKA_KYRKAN_UNIT_API_BASE = 'https://api.svenskakyrkan.se/externwebb/api-v2/odata/units';
+
+interface SvenskaKyrkanUnit {
+  unitId: number;
+  name: string | null;
+  websiteAddress: string | null;
+  unitType: string | null;
+}
+
+async function harvestSvenskaKyrkan(database: RegionDatabase): Promise<HarvestedOrg[]> {
+  const apiKey = process.env.SVENSKA_KYRKAN_UNIT_API_KEY;
+  if (!apiKey) {
+    console.error('Svenska kyrkan: SVENSKA_KYRKAN_UNIT_API_KEY saknas, hoppar över.');
+    return [];
+  }
+
+  const results: HarvestedOrg[] = [];
+
+  for (const [code, municipalityName] of DALARNA_MUNICIPALITIES) {
+    let units: SvenskaKyrkanUnit[];
+    try {
+      const res = await axios.get(SVENSKA_KYRKAN_UNIT_API_BASE, {
+        params: {
+          $filter: `localAuthorityCode eq '${code}' and activatedCalendar eq true`,
+          $select: 'unitId,name,websiteAddress,unitType',
+        },
+        headers: { ...REQUEST_HEADERS, 'SvkAuthSvc-ApiKey': apiKey },
+        timeout: HTTP_TIMEOUT_MS,
+      });
+      units = res.data.value as SvenskaKyrkanUnit[];
+    } catch (err) {
+      console.error(`Svenska kyrkan: kunde inte hämta enheter för ${municipalityName} (${code}):`, err);
+      continue;
+    }
+
+    for (const unit of units) {
+      if (!unit.name || !unit.websiteAddress) continue;
+      const unitIdStr = String(unit.unitId);
+      results.push({
+        id: `kyrka-${unit.unitId}`,
+        name: unit.name,
+        url: unit.websiteAddress,
+        type: 'kyrka',
+        discoveredFrom: `${database.name} — UnitAPI (kommun: ${municipalityName})`,
+        externalIds: { ownerId: unitIdStr, unitId: unitIdStr },
+      });
+    }
+  }
+
+  return results;
+}
 
 // Byggd, testad och sedan AVSTÄNGD: extraherar kyrkonamn korrekt från
 // svenskakyrkan.se/vasterasstift/kyrkor-i-dalarna (statisk, ingen JS krävs
@@ -148,7 +201,7 @@ async function harvestSvenskaKyrkanHeritagePages(database: RegionDatabase): Prom
       id: `kyrka-${name.toLowerCase().replace(/[^a-z0-9åäö]+/g, '-').replace(/^-+|-+$/g, '')}`,
       name,
       url: absoluteUrl, // OBS: pekar på en PDF, inte en webbsida — se kommentar ovan
-      category: 'kyrka',
+      type: 'kyrka',
       discoveredFrom: `${database.name} — statisk byggnadslista, url leder till PDF (ej lämplig ingestion-kandidat, se org-harvesters.ts)`,
     });
   });
@@ -178,13 +231,13 @@ async function harvestSvenskaKyrkanHeritagePages(database: RegionDatabase): Prom
 // organisation" — lägg till den direkt i candidate-sources istället för att
 // låtsas extrahera en lista som inte finns.
 // ---------------------------------------------------------------------------
-function harvestSelf(category: CandidateCategory): Harvester {
+function harvestSelf(type: CandidateCategory): Harvester {
   return async (database: RegionDatabase): Promise<HarvestedOrg[]> => [
     {
       id: database.id,
       name: database.name,
       url: database.url,
-      category,
+      type,
       discoveredFrom: `${database.name} — databasen visade sig vara en enskild organisation, inte en katalog över flera (se org-harvesters.ts)`,
     },
   ];
@@ -192,6 +245,7 @@ function harvestSelf(category: CandidateCategory): Harvester {
 
 export const HARVESTERS: Record<string, Harvester> = {
   'skolverket-skolenhetsregistret': harvestSkolverket,
+  'svenska-kyrkan-sok-forsamling': harvestSvenskaKyrkan,
   'rf-sisu-dalarna': harvestSelf('ideell-organisation'),
   'sv-dalarna': harvestSelf('ideell-organisation'),
   'abf-dalarna': harvestSelf('ideell-organisation'),

@@ -139,7 +139,8 @@ async function main() {
       name: s.name,
       url: s.url,
       region: 'Dalarna',
-      category: 'skola',
+      type: 'skola',
+      source: 'skolverket-skolenhetsregistret',
       discoveredFrom: `Skolverkets Skolenhetsregister API v2 (pilot 2026-09-12), kommun: ${s.municipality}`,
     }))
   );
