@@ -12,7 +12,9 @@ export type CandidateCategory =
   | 'turism'
   | 'aggregator'
   | 'skola'
-  | 'kyrka';
+  | 'kyrka'
+  | 'ideell-organisation'
+  | 'bibliotek';
 
 export type CandidateStatus = 'pending' | 'ready-to-ingest' | 'rejected';
 
