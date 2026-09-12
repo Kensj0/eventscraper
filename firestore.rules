@@ -12,5 +12,11 @@ service cloud.firestore {
     match /sources/{document=**} {
       allow read, write: if false;
     }
+
+    // Kandidat-organisationer från källupptäckten (DEL 1/DEL 2) — samma
+    // princip som "sources": bara Cloud Functions/admin-skript ska nå den.
+    match /candidate-sources/{document=**} {
+      allow read, write: if false;
+    }
   }
 }
