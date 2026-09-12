@@ -4,6 +4,7 @@ import Parser from 'rss-parser';
 import axios from 'axios';
 import { scrapeBorlange, scrapeFalun, scrapeLudvika, scrapeRattvik, ScrapedEvent } from './html-scraper';
 import { getEnabledSources, updateSourceStatus } from './source-config';
+import { runSvenskaKyrkanIngestion } from './svenska-kyrkan-ingestion';
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -239,6 +240,32 @@ export const scrapeHTMLSources = functions
     }
 
     const result = await runHTMLIngestion();
+    res.status(200).json(result);
+  });
+
+// Scheduled trigger (daily at 3 AM, en timme efter RSS/HTML så de inte
+// tävlar om samma Cloud Functions-instans-kvot)
+export const ingestSvenskaKyrkanEvents = functions
+  .region('europe-west1')
+  .runWith(INGESTION_RUNTIME_OPTS)
+  .pubsub.schedule('0 3 * * *')
+  .timeZone('Europe/Stockholm')
+  .onRun(async () => {
+    return await runSvenskaKyrkanIngestion('scheduled');
+  });
+
+// HTTP trigger for manual testing
+export const ingestSvenskaKyrkanEventsManual = functions
+  .region('europe-west1')
+  .runWith(INGESTION_RUNTIME_OPTS)
+  .https.onRequest(async (req, res) => {
+    const key = req.query.key || req.body.key;
+    if (key !== process.env.INGEST_SECRET_KEY && key !== 'test-local') {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const result = await runSvenskaKyrkanIngestion('manual');
     res.status(200).json(result);
   });
 
