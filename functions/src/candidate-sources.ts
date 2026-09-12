@@ -10,7 +10,8 @@ export type CandidateCategory =
   | 'teater'
   | 'arena'
   | 'turism'
-  | 'aggregator';
+  | 'aggregator'
+  | 'skola';
 
 export type CandidateStatus = 'pending' | 'ready-to-ingest' | 'rejected';
 
