@@ -16,16 +16,28 @@ export type CandidateCategory =
   | 'ideell-organisation'
   | 'bibliotek';
 
-export type CandidateStatus = 'pending' | 'ready-to-ingest' | 'rejected';
+export type CandidateStatus = 'new' | 'ready-to-ingest' | 'verified' | 'failed';
 
+// externalIds: id:n mot organisationens EGNA API:er (om den har några) —
+// t.ex. Svenska kyrkans UnitAPI-unitId, som är samma värde CalendarAPI:s
+// owner_id-filter förväntar sig (se org-harvesters.ts:harvestSvenskaKyrkan).
+// Gör det möjligt att gå API-till-API för denna typ av källa istället för
+// att skrapa organisationens webbplats.
 export interface CandidateSource {
   id: string;
   name: string;
   url: string;
   region: string;
-  category: CandidateCategory;
-  discoveredFrom: string;
-  discoveredAt: admin.firestore.Timestamp;
+  type: CandidateCategory;
+  source: string;
+  externalIds?: {
+    ownerId?: string;
+    unitId?: string;
+    [key: string]: string | undefined;
+  };
+  discoveredFrom?: string;
+  createdAt: admin.firestore.Timestamp;
+  lastVerified?: admin.firestore.Timestamp;
   status: CandidateStatus;
 }
 
@@ -35,10 +47,11 @@ function db() {
 
 // merge:true så att en redan upptäckt organisation kan köras om (t.ex. med
 // uppdaterad URL) utan att tappa ett status som DEL 2 redan satt — status
-// sätts bara till 'pending' för dokument som inte redan finns.
+// sätts bara till 'new' för dokument som inte redan finns.
 export async function upsertCandidateSources(
   candidates: Array<
-    Pick<CandidateSource, 'id' | 'name' | 'url' | 'region' | 'category' | 'discoveredFrom'>
+    Pick<CandidateSource, 'id' | 'name' | 'url' | 'region' | 'type' | 'source'> &
+      Partial<Pick<CandidateSource, 'discoveredFrom' | 'externalIds'>>
   >
 ): Promise<{ added: number; updated: number }> {
   const refs = candidates.map((c) => db().collection('candidate-sources').doc(c.id));
@@ -48,9 +61,9 @@ export async function upsertCandidateSources(
   const batch = db().batch();
   for (const candidate of candidates) {
     const { id, ...data } = candidate;
-    const patch: Record<string, unknown> = { ...data, discoveredAt: admin.firestore.Timestamp.now() };
+    const patch: Record<string, unknown> = { ...data, createdAt: admin.firestore.Timestamp.now() };
     if (!existingIds.has(id)) {
-      patch.status = 'pending' satisfies CandidateStatus;
+      patch.status = 'new' satisfies CandidateStatus;
     }
     batch.set(db().collection('candidate-sources').doc(id), patch, { merge: true });
   }

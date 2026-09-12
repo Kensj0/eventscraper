@@ -51,7 +51,7 @@ async function main() {
 
     if (orgs.length > 0) {
       const { added, updated } = await upsertCandidateSources(
-        orgs.map((org) => ({ ...org, region: 'Dalarna' }))
+        orgs.map((org) => ({ ...org, region: 'Dalarna', source: database.id }))
       );
       totalAdded += added;
       totalUpdated += updated;
