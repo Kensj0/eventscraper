@@ -330,6 +330,54 @@ async function harvestStudieframjandet(database: RegionDatabase): Promise<Harves
   return results;
 }
 
+// ---------------------------------------------------------------------------
+// Dalabiblioteken — den delade Axiell Arena-portalen (dalabiblioteken.se) är
+// själv ingen katalog över organisationer, men undersidan /vara-bibliotek
+// (redan flaggad i discover-databases.ts som "själva listan ligger under en
+// 'Våra bibliotek'-undersida") ÄR en riktig lista: 40+ enskilda BIBLIOTEKS-
+// FILIALER (inte bara 15 kommunnivå — t.ex. Bjursås/Björbo/Boda/Torsång är
+// egna filialer inom Falun/Gagnef/Borlänge-kommunerna), statisk HTML, ingen
+// JS-rendering krävd. Verifierat live. Varje filial har en egen detaljsida
+// på dalabiblioteken.se (t.ex. /-/bjursas-bibliotek), inte en extern
+// kommunbibliotek-webbplats — url:en pekar alltså in i samma delade portal,
+// vilket är korrekt: det finns ingen annan webbplats per filial.
+// ---------------------------------------------------------------------------
+const DALABIBLIOTEKEN_BRANCHES_URL = 'https://dalabiblioteken.se/vara-bibliotek';
+
+async function harvestDalabiblioteken(database: RegionDatabase): Promise<HarvestedOrg[]> {
+  let $: cheerio.CheerioAPI;
+  try {
+    const res = await axios.get(DALABIBLIOTEKEN_BRANCHES_URL, { headers: REQUEST_HEADERS, timeout: HTTP_TIMEOUT_MS });
+    $ = cheerio.load(res.data);
+  } catch (err) {
+    console.error('Dalabiblioteken: kunde inte hämta /vara-bibliotek:', err);
+    return [];
+  }
+
+  const results: HarvestedOrg[] = [];
+  const seen = new Set<string>();
+
+  $('a.branch-list-container').each((_, el) => {
+    const href = $(el).attr('href');
+    const name = $(el).find('h2').first().text().trim();
+    if (!href || !name || seen.has(href)) return;
+    seen.add(href);
+    // href är t.ex. ".../-/bjursas-bibliotek#/?location=..." — slug mellan
+    // sista "/-/ " och en eventuell "#" är unik per filial.
+    const slug = href.split('/-/')[1]?.split(/[#?]/)[0];
+    if (!slug) return;
+    results.push({
+      id: `bibliotek-${slug}`,
+      name,
+      url: href.split('#')[0],
+      type: 'bibliotek',
+      discoveredFrom: `${database.name} — vara-bibliotek (filiallista)`,
+    });
+  });
+
+  return results;
+}
+
 // SV Dalarna får INTE samma behandling som ABF/Studiefrämjandet ovan — sv.se
 // har inget url-baserat länfilter (kurssidor ligger under /kurser-och-
 // evenemang/ utan region i sökvägen, 4086 st nationellt enligt sitemap.axd)
@@ -357,5 +405,5 @@ export const HARVESTERS: Record<string, Harvester> = {
   'sv-dalarna': harvestSelf('ideell-organisation'),
   'abf-dalarna': harvestABF,
   'studieframjandet': harvestStudieframjandet,
-  'dalabiblioteken': harvestSelf('bibliotek'),
+  'dalabiblioteken': harvestDalabiblioteken,
 };
