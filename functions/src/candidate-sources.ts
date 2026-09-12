@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { SourceMethod } from './source-config';
 
 // Kandidat-organisationer för källupptäckt (DEL 1) lever i Firestore-
 // collectionen "candidate-sources" — separat från "sources" (source-config.ts)
@@ -40,6 +41,13 @@ export interface CandidateSource {
   createdAt: admin.firestore.Timestamp;
   lastVerified?: admin.firestore.Timestamp;
   status: CandidateStatus;
+  // Satta av DEL 2:s capability-test (functions/src/capability-test.ts) när
+  // status blir 'ready-to-ingest' — verifiedMethod matchar SourceMethod i
+  // source-config.ts så en godkänd kandidat kan kopieras rakt in i "sources"
+  // utan omtolkning. feedUrl är satt för ical/rss (sidans url är sällan
+  // samma som själva feeden); saknas för jsonld/html.
+  verifiedMethod?: SourceMethod;
+  feedUrl?: string;
 }
 
 function db() {
