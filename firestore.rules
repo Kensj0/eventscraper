@@ -18,5 +18,11 @@ service cloud.firestore {
     match /candidate-sources/{document=**} {
       allow read, write: if false;
     }
+
+    // Databaser (föreningsregister, kataloger, API:er) som källupptäckten
+    // hittat per region/organisationstyp — samma princip som ovan.
+    match /region-databases/{document=**} {
+      allow read, write: if false;
+    }
   }
 }
