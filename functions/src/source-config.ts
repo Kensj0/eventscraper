@@ -5,7 +5,7 @@ import * as admin from 'firebase-admin';
 // utan en ny deploy. "method" täcker redan de fyra strategier DEL 1
 // (functions/src/sources/, pausad tills en riktig JSON-LD/iCal-källa finns)
 // är tänkt att implementera — idag används bara 'rss' och 'html'.
-export type SourceMethod = 'jsonld' | 'ical' | 'rss' | 'html';
+export type SourceMethod = 'jsonld' | 'ical' | 'rss' | 'html' | 'svenska-kyrkan-calendar';
 
 export interface SourceConfig {
   id: string;
@@ -18,6 +18,13 @@ export interface SourceConfig {
   lastSuccess?: admin.firestore.Timestamp;
   lastError?: string;
   eventsFound?: number;
+  // Satt för method:'svenska-kyrkan-calendar' — samma ownerId som redan
+  // populerades på candidate-sources av UnitAPI-harvestern (org-harvesters.ts),
+  // och exakt det värde CalendarAPI:s owner_id-filter förväntar sig.
+  externalIds?: {
+    ownerId?: string;
+    [key: string]: string | undefined;
+  };
 }
 
 function db() {
