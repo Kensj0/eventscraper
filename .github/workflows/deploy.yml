@@ -69,6 +69,7 @@ jobs:
           INGEST_SECRET_KEY=${{ secrets.INGEST_SECRET_KEY }}
           RSS_FEED_1=${{ secrets.RSS_FEED_1 }}
           RSS_FEED_2=${{ secrets.RSS_FEED_2 }}
+          SVENSKA_KYRKAN_CALENDAR_API_KEY=${{ secrets.SVENSKA_KYRKAN_CALENDAR_API_KEY }}
           EOF
 
       - name: Bygg frontend (statisk export till .next/standalone)
