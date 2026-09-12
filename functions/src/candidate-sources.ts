@@ -11,7 +11,8 @@ export type CandidateCategory =
   | 'arena'
   | 'turism'
   | 'aggregator'
-  | 'skola';
+  | 'skola'
+  | 'kyrka';
 
 export type CandidateStatus = 'pending' | 'ready-to-ingest' | 'rejected';
 
