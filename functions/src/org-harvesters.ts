@@ -210,27 +210,134 @@ async function harvestSvenskaKyrkanHeritagePages(database: RegionDatabase): Prom
 }
 
 // ---------------------------------------------------------------------------
-// RF-SISU Dalarna, studieförbunden (SV/ABF/Studiefrämjandet) och
-// Dalabiblioteken — undersökta men INTE riktiga "en databas med många
-// organisationer" på det sätt Skolverket/Svenska kyrkans UnitAPI är:
+// RF-SISU Dalarna och Dalabiblioteken — undersökta men INTE riktiga "en
+// databas med många organisationer" på det sätt Skolverket/Svenska kyrkans
+// UnitAPI är, och därför fortfarande self-harvestade nedan:
 //
 // - RF-SISU Dalarna har inte en publik medlemsföreningslista på sin egen
 //   sajt (kollat rfsisu.se/distrikt/dalarna och sökt efter röstlängd/
 //   årsmöteshandlingar). Den nationella "Hitta inom idrottsrörelsen" HAR de
-//   ~900 föreningarna, men är ett rent JS-sökformulär utan API (se
-//   region-databases.ts, scrapable:'no-js-rendered') — inte löst här.
-// - SV Dalarna/ABF Dalarna/Studiefrämjandet är själva EN organisation som
-//   kör kurser/cirklar i alla 15 kommuner, inte en katalog över andra
-//   föreningar (bekräftat: sv.se/avdelningar/sv-dalarna listar egna
-//   evenemang, ingen medlemslista).
+//   ~900 föreningarna, men är ett rent JS-sökformulär utan öppet API — det
+//   riktiga bakomliggande API:et (IdrottOnline, devportal.idrottonline.se)
+//   kräver att man är specialidrottsförbund eller registrerad partner
+//   ("please do not sign up" annars, verifierat live) — en policy-spärr,
+//   inte en teknisk sådan. Inte löst här.
 // - Dalabiblioteken är en delad LÅNTAGARPORTAL (Axiell Arena, BankID-inlogg
 //   för kontofunktioner) för de 15 kommunbibliotekens gemensamma katalog —
 //   inte en sida som länkar ut till 15 separata bibliotekswebbplatser.
 //
-// Den ärliga harvesten för dessa fem är därför "databasen ÄR sin egen enda
+// Den ärliga harvesten för dessa två är därför "databasen ÄR sin egen enda
 // organisation" — lägg till den direkt i candidate-sources istället för att
 // låtsas extrahera en lista som inte finns.
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// ABF Dalarna — riktig kurskatalog, statisk HTML, ingen JS-rendering krävd.
+// /dalarna/kurs-sok/?type=course&page=N är WordPress-server-renderad (helt
+// annan plattform än SV/Studiefrämjandet), redan Dalarna-scopad via
+// url-prefixet /dalarna/. Verifierat live: sida 1 gav 9 kort, sida 7 gav 0
+// (bortom sista sidan) — loopen stannar på första tomma sidan istället för
+// ett hårdkodat sidantal, så den håller även när kursutbudet växer/krymper.
+// ---------------------------------------------------------------------------
+const ABF_SEARCH_URL = 'https://www.abf.se/dalarna/kurs-sok/';
+const ABF_MAX_PAGES = 30; // säkerhetstak, verkligt sidantal var 6 vid verifiering
+
+async function harvestABF(database: RegionDatabase): Promise<HarvestedOrg[]> {
+  const results: HarvestedOrg[] = [];
+
+  for (let page = 1; page <= ABF_MAX_PAGES; page++) {
+    let $: cheerio.CheerioAPI;
+    try {
+      const res = await axios.get(ABF_SEARCH_URL, {
+        params: { type: 'course', page },
+        headers: REQUEST_HEADERS,
+        timeout: HTTP_TIMEOUT_MS,
+      });
+      $ = cheerio.load(res.data);
+    } catch (err) {
+      console.error(`ABF Dalarna: kunde inte hämta kurssök sida ${page}:`, err);
+      break;
+    }
+
+    const cards = $('article.CourseCard');
+    if (cards.length === 0) break; // sista sidan passerad
+
+    cards.each((_, el) => {
+      const name = $(el).find('h3.CourseCard-title').first().text().trim();
+      const url = $(el).find('footer.CourseCard-footer a[href]').first().attr('href');
+      if (!name || !url) return;
+      const slug = url.split('/').filter(Boolean).pop();
+      results.push({
+        id: `abf-${slug}`,
+        name,
+        url,
+        type: 'kurs',
+        discoveredFrom: `${database.name} — kurssök sida ${page}`,
+      });
+    });
+  }
+
+  return results;
+}
+
+// ---------------------------------------------------------------------------
+// Studiefrämjandet — ingen fungerande region-filtrering i sökformuläret,
+// men webbplatsens EGEN sitemap.xml listar varje kurs/kalenderhändelse med
+// länet redan i url-sökvägen (t.ex. /dalarnas-lan/.../kurser/...), så ingen
+// gissning krävs. Verifierat live: 92 url:er innehåller "/dalarnas-lan/",
+// varav 91 är enskilda aktivitetssidor (kurser + kalenderhändelser) och en
+// är själva länets landningssida (utesluten).
+// ---------------------------------------------------------------------------
+const STUDIEFRAMJANDET_SITEMAP = 'https://www.studieframjandet.se/sitemap.xml';
+
+async function harvestStudieframjandet(database: RegionDatabase): Promise<HarvestedOrg[]> {
+  let activityUrls: string[];
+  try {
+    const res = await axios.get(STUDIEFRAMJANDET_SITEMAP, { headers: REQUEST_HEADERS, timeout: HTTP_TIMEOUT_MS });
+    const $ = cheerio.load(res.data, { xmlMode: true });
+    const allUrls = $('url > loc')
+      .map((_, el) => $(el).text().trim())
+      .get();
+    activityUrls = allUrls.filter(
+      (url) => url.includes('/dalarnas-lan/') && (url.includes('/kurser/') || url.includes('/kalenderhandelser/'))
+    );
+  } catch (err) {
+    console.error('Studiefrämjandet: kunde inte hämta sitemap.xml:', err);
+    return [];
+  }
+
+  const results: HarvestedOrg[] = [];
+  for (const url of activityUrls) {
+    try {
+      const res = await axios.get(url, { headers: REQUEST_HEADERS, timeout: HTTP_TIMEOUT_MS });
+      const $ = cheerio.load(res.data);
+      const name = $('h1').first().text().trim();
+      if (!name) continue;
+      // Hela url-sökvägen (utan domän) som id — sitemapens loc är redan
+      // garanterat unik, så det finns ingen kollisionsrisk att hantera.
+      const id = new URL(url).pathname.replace(/^\/|\/$/g, '').replace(/\//g, '-');
+      results.push({
+        id: `studieframjandet-${id}`,
+        name,
+        url,
+        type: 'kurs',
+        discoveredFrom: `${database.name} — sitemap.xml (Dalarnas län)`,
+      });
+    } catch (err) {
+      console.error(`Studiefrämjandet: kunde inte hämta ${url}:`, err);
+    }
+  }
+
+  return results;
+}
+
+// SV Dalarna får INTE samma behandling som ABF/Studiefrämjandet ovan — sv.se
+// har inget url-baserat länfilter (kurssidor ligger under /kurser-och-
+// evenemang/ utan region i sökvägen, 4086 st nationellt enligt sitemap.axd)
+// och sidans eget filter-API (/api/productFilter, en Litium-e-handelsplattform
+// där kurser är modellerade som "produkter") svarar 500 på anrop utan en
+// fullständig webbläsarsession — verifierat live, inte löst här. Förblir
+// self-harvestad (se harvestSelf nedan) tills antingen API:et knäcks eller
+// en headless-browser-lösning byggs (samma avvägning som RF-SISU).
 function harvestSelf(type: CandidateCategory): Harvester {
   return async (database: RegionDatabase): Promise<HarvestedOrg[]> => [
     {
@@ -248,7 +355,7 @@ export const HARVESTERS: Record<string, Harvester> = {
   'svenska-kyrkan-sok-forsamling': harvestSvenskaKyrkan,
   'rf-sisu-dalarna': harvestSelf('ideell-organisation'),
   'sv-dalarna': harvestSelf('ideell-organisation'),
-  'abf-dalarna': harvestSelf('ideell-organisation'),
-  'studieframjandet': harvestSelf('ideell-organisation'),
+  'abf-dalarna': harvestABF,
+  'studieframjandet': harvestStudieframjandet,
   'dalabiblioteken': harvestSelf('bibliotek'),
 };

@@ -14,7 +14,8 @@ export type CandidateCategory =
   | 'skola'
   | 'kyrka'
   | 'ideell-organisation'
-  | 'bibliotek';
+  | 'bibliotek'
+  | 'kurs';
 
 export type CandidateStatus = 'new' | 'ready-to-ingest' | 'verified' | 'failed';
 
