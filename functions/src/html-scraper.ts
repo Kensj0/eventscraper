@@ -37,13 +37,13 @@ export interface ScrapedEvent {
   sourceName: string;
 }
 
-const HTTP_TIMEOUT_MS = 15000;
-const REQUEST_HEADERS = {
+export const HTTP_TIMEOUT_MS = 15000;
+export const REQUEST_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (compatible; EventScraperDalarna/1.0)',
 };
 const SITE_ITEM_LIMIT = 10;
 
-async function fetchHtml(url: string): Promise<string> {
+export async function fetchHtml(url: string): Promise<string> {
   const response = await axios.get(url, {
     timeout: HTTP_TIMEOUT_MS,
     headers: REQUEST_HEADERS,
