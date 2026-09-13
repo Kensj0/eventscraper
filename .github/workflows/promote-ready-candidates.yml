@@ -1,0 +1,30 @@
+name: Promota redo kandidater
+
+on:
+  workflow_dispatch:
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Sätt upp Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: functions/package-lock.json
+
+      - name: Installera functions-beroenden
+        run: npm ci --prefix functions
+
+      - name: Skriv Google service account-nyckel till fil
+        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > /tmp/gcp-key.json
+
+      - name: Promota candidate-sources (status ready-to-ingest) till sources
+        working-directory: functions
+        run: npm run promote-ready-candidates
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
