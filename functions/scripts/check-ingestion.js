@@ -1,7 +1,11 @@
-// Läser senaste RSS-ingestion-loggen från Firestore (skriven av
-// logIngestionRun i src/index.ts) och letar efter anomalier. Körs från
-// .github/workflows/check-ingestion.yml med GOOGLE_APPLICATION_CREDENTIALS
-// satt till en service account-nyckel (samma som deploy.yml använder).
+// Läser senaste ingestion-loggen av en given typ från Firestore (skriven av
+// logIngestionRun i src/index.ts eller src/svenska-kyrkan-ingestion.ts) och
+// letar efter anomalier. Körs från .github/workflows/check-ingestion.yml med
+// GOOGLE_APPLICATION_CREDENTIALS satt till en service account-nyckel (samma
+// som deploy.yml använder).
+//
+// Typ styrs av CHECK_TYPE env-var (default 'rss') så samma script kan
+// kontrollera t.ex. 'svenska-kyrkan-calendar' också — loggformen är identisk.
 //
 // Om något ser fel ut: skriver en rapport till GITHUB_STEP_SUMMARY och
 // avslutar med exitcode 1, så att GitHub Actions egna
@@ -13,6 +17,7 @@ const admin = require('firebase-admin');
 admin.initializeApp();
 const db = admin.firestore();
 
+const CHECK_TYPE = process.env.CHECK_TYPE || 'rss';
 const MAX_DURATION_MS = 5 * 60 * 1000; // 5 minuter
 
 function evaluateAnomalies(log) {
@@ -88,22 +93,22 @@ async function main() {
     .limit(5)
     .get();
 
-  const rssDoc = snapshot.docs.find((doc) => doc.data().type === 'rss');
+  const logDoc = snapshot.docs.find((doc) => doc.data().type === CHECK_TYPE);
 
-  if (!rssDoc) {
+  if (!logDoc) {
     writeSummary(
-      '# Ingestion-kontroll\n\n⚠️ Ingen RSS-ingestion-logg hittades alls i `ingestion_logs`. Kördes ingestRSSFeedsManual verkligen, och skrev den en logg?'
+      `# Ingestion-kontroll (${CHECK_TYPE})\n\n⚠️ Ingen ingestion-logg av typ '${CHECK_TYPE}' hittades alls i \`ingestion_logs\`. Kördes ingestionen verkligen, och skrev den en logg?`
     );
     process.exitCode = 1;
     return;
   }
 
-  const log = rssDoc.data();
+  const log = logDoc.data();
   const timestamp = log.timestamp && log.timestamp.toDate ? log.timestamp.toDate().toISOString() : 'okänd tid';
   const anomalies = evaluateAnomalies(log);
 
   const lines = [];
-  lines.push('# Ingestion-kontroll');
+  lines.push(`# Ingestion-kontroll (${CHECK_TYPE})`);
   lines.push('');
   lines.push(`Körning: ${timestamp} (trigger: ${log.trigger || 'okänd'})`);
   lines.push(`processed=${log.processed} skipped=${log.skipped} duration=${log.duration_ms}ms api_calls=${(log.api_usage || {}).calls}`);

@@ -26,11 +26,25 @@ jobs:
             "https://europe-west1-${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}.cloudfunctions.net/ingestRSSFeedsManual?key=test-local" \
             --max-time 300
 
+      - name: Trigga ingestSvenskaKyrkanEventsManual
+        run: |
+          curl -sf \
+            "https://europe-west1-${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}.cloudfunctions.net/ingestSvenskaKyrkanEventsManual?key=test-local" \
+            --max-time 300
+
       - name: Skriv Google service account-nyckel till fil
         run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > /tmp/gcp-key.json
 
-      - name: Kontrollera senaste ingestion-logg
+      - name: Kontrollera senaste RSS-ingestion-logg
         working-directory: functions
         run: npm run check-ingestion
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
+          CHECK_TYPE: rss
+
+      - name: Kontrollera senaste Svenska kyrkan-ingestion-logg
+        working-directory: functions
+        run: npm run check-ingestion
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
+          CHECK_TYPE: svenska-kyrkan-calendar
