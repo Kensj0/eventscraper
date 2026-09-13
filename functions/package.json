@@ -15,6 +15,7 @@
     "promote-ready-candidates": "ts-node scripts/promote-ready-candidates.ts",
     "report-live-stats": "ts-node scripts/report-live-stats.ts",
     "list-rss-sources": "ts-node scripts/list-rss-sources.ts",
+    "dedupe-rss-sources": "ts-node scripts/dedupe-rss-sources.ts",
     "pilot-skolverket": "ts-node scripts/pilot-skolverket.ts"
   },
   "dependencies": {
