@@ -88,10 +88,12 @@ async function callAI(title: string, description: string, referenceDate?: string
   // annars servertiden.
   const effectiveReferenceDate = referenceDate || new Date().toISOString();
 
-  const prompt = `You are an event parser. Analyze the following text and determine if it describes a specific event with a date/time and location.
+  const prompt = `You are an event parser. Analyze the following text and determine if it describes a specific UPCOMING event with a date/time and location — something a reader could still go to.
 
 Reference date (when this text was published/scraped): ${effectiveReferenceDate}
 If the text gives a date without a year (e.g. "10 september", or an annual observance like "Alzheimerdagen"), resolve it to the nearest occurrence on or after the reference date — never leave start_time empty just because the year is implicit.
+
+Set is_event to false for a recap, report, or result describing something that ALREADY happened (e.g. a match report written after the game, a "we just celebrated X" news post) — even though it clearly describes a real occurrence with a date and place. Recognize past tense and phrases like "efter matchen", "i somras", "firade" as signals it is a recap, not an upcoming event.
 
 Title: ${title}
 Description: ${description.substring(0, 500)}
