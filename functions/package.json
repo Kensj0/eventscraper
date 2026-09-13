@@ -14,6 +14,7 @@
     "promote-svenska-kyrkan-sources": "ts-node scripts/promote-svenska-kyrkan-sources.ts",
     "promote-ready-candidates": "ts-node scripts/promote-ready-candidates.ts",
     "report-live-stats": "ts-node scripts/report-live-stats.ts",
+    "list-rss-sources": "ts-node scripts/list-rss-sources.ts",
     "pilot-skolverket": "ts-node scripts/pilot-skolverket.ts"
   },
   "dependencies": {
