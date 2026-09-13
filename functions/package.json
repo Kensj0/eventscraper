@@ -17,6 +17,7 @@
     "list-rss-sources": "ts-node scripts/list-rss-sources.ts",
     "dedupe-rss-sources": "ts-node scripts/dedupe-rss-sources.ts",
     "list-failed-candidates": "ts-node scripts/list-failed-candidates.ts",
+    "promote-html-detail-candidates": "ts-node scripts/promote-html-detail-candidates.ts",
     "pilot-skolverket": "ts-node scripts/pilot-skolverket.ts"
   },
   "dependencies": {

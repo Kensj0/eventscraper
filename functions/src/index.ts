@@ -3,6 +3,7 @@ import * as admin from 'firebase-admin';
 import Parser from 'rss-parser';
 import axios from 'axios';
 import { scrapeBorlange, scrapeFalun, scrapeLudvika, scrapeRattvik, ScrapedEvent } from './html-scraper';
+import { detailPageAdapterFor } from './html-detail-adapters';
 import { getEnabledSources, updateSourceStatus } from './source-config';
 import { runSvenskaKyrkanIngestion } from './svenska-kyrkan-ingestion';
 
@@ -36,6 +37,26 @@ const HTML_SCRAPERS: Record<string, () => Promise<ScrapedEvent[]>> = {
 
 const parser = new Parser();
 const MAX_ITEMS_PER_RUN = 10;
+// HTML-källorna växte 2026-09-13 från 4 kommun-listor till ~118 (+114
+// enskilda kurs-detaljsidor, se html-detail-adapters.ts) — samma
+// MAX_ITEMS_PER_RUN=10 hade i praktiken bara någonsin bearbetat en handfull
+// av dem (interleave() itererar källorna i en fast ordning varje körning,
+// så slice(0, 10) skulle alltid ge samma vinnare). Egen, högre gräns för
+// HTML, kombinerat med att blanda källordningen (se shuffle nedan) så alla
+// källor roterar in över flera körningar istället för att svälta permanent.
+const MAX_HTML_ITEMS_PER_RUN = 30;
+
+// Fisher-Yates — ren funktion, muterar inte input. Används för att variera
+// vilka HTML-källor som får plats inom MAX_HTML_ITEMS_PER_RUN mellan
+// körningar (se kommentaren ovan).
+function shuffle<T>(items: T[]): T[] {
+  const result = [...items];
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
 
 // Modeller lyder inte alltid instruktionen "no markdown, no code blocks" —
 // strippa ```json ... ``` -inramning innan vi parsar.
@@ -243,6 +264,21 @@ export const scrapeHTMLSources = functions
     res.status(200).json(result);
   });
 
+// Scheduled trigger (daily at 4 AM, en timme efter Svenska kyrkan så de inte
+// tävlar om samma Cloud Functions-instans-kvot). Fanns tidigare bara som
+// HTTP-triggern ovan (manuell) — 'html' hade alltså aldrig körts automatiskt
+// i produktion förrän detta lades till 2026-09-13, i samband med att DEL 1:s
+// HTML-adapter (html-detail-adapters.ts) återupptogs och växte källistan
+// från 4 till ~118.
+export const scrapeHTMLSourcesScheduled = functions
+  .region('europe-west1')
+  .runWith(INGESTION_RUNTIME_OPTS)
+  .pubsub.schedule('0 4 * * *')
+  .timeZone('Europe/Stockholm')
+  .onRun(async () => {
+    return await runHTMLIngestion('scheduled');
+  });
+
 // Scheduled trigger (daily at 3 AM, en timme efter RSS/HTML så de inte
 // tävlar om samma Cloud Functions-instans-kvot)
 export const ingestSvenskaKyrkanEvents = functions
@@ -272,7 +308,7 @@ export const ingestSvenskaKyrkanEventsManual = functions
 // Shared HTML-scraping ingestion logic — samma AI-parsing/dedup-pipeline som RSS.
 // Exporteras (utöver att användas av scrapeHTMLSources ovan) så den kan
 // testas direkt med ett litet Node-skript utan att gå via functions-emulatorn.
-export async function runHTMLIngestion() {
+export async function runHTMLIngestion(trigger: 'scheduled' | 'manual' = 'manual') {
   const startedAt = Date.now();
   let processedCount = 0;
   let itemsSkipped = 0;
@@ -283,15 +319,26 @@ export async function runHTMLIngestion() {
   const seenUrls = new Set<string>();
   const sourceNamesAttempted = new Set<string>();
 
-  const htmlSources = await getEnabledSources('html');
+  // Blandad ordning varje körning (se MAX_HTML_ITEMS_PER_RUN-kommentaren
+  // ovan) — annars skulle Firestores (icke garanterat men i praktiken
+  // stabila) svarsordning ge exakt samma källor företräde i varje körning.
+  const htmlSources = shuffle(await getEnabledSources('html'));
 
   const scraperRuns = await Promise.allSettled(
-    htmlSources.map((source) => {
+    htmlSources.map(async (source) => {
       const scraper = HTML_SCRAPERS[source.id];
-      if (!scraper) {
-        return Promise.reject(new Error(`No scraper registered for source id "${source.id}"`));
+      if (scraper) return scraper();
+
+      // Källor promotade av promote-html-detail-candidates.ts (DEL 1:s
+      // återupptagna HTML-adapter) har ingen egen bespoke scraper-funktion
+      // per källa — de är en av flera hundra enskilda detalj-sidor som delar
+      // en sajt-mall, dispatchas per domän istället för per käll-id.
+      const adapter = detailPageAdapterFor(source.url);
+      if (!adapter) {
+        throw new Error(`No scraper registered for source id "${source.id}"`);
       }
-      return scraper();
+      const event = await adapter(source.url);
+      return event ? [event] : [];
     })
   );
 
@@ -313,11 +360,11 @@ export async function runHTMLIngestion() {
   }
 
   // Varva källorna istället för att lägga dem efter varandra — annars äter
-  // Borlänge+Falun (16 event tillsammans) upp hela MAX_ITEMS_PER_RUN innan
-  // Ludvika eller Rättvik någonsin hinner bidra med ett enda event.
+  // Borlänge+Falun (16 event tillsammans) upp hela MAX_HTML_ITEMS_PER_RUN
+  // innan Ludvika eller Rättvik någonsin hinner bidra med ett enda event.
   const scrapedEvents = interleave(perSourceEvents);
 
-  for (const event of scrapedEvents.slice(0, MAX_ITEMS_PER_RUN)) {
+  for (const event of scrapedEvents.slice(0, MAX_HTML_ITEMS_PER_RUN)) {
     if (!event.url) {
       itemsSkipped++;
       continue;
@@ -387,7 +434,7 @@ export async function runHTMLIngestion() {
 
   await logIngestionRun({
     type: 'html',
-    trigger: 'manual',
+    trigger,
     processed: processedCount,
     skipped: itemsSkipped,
     errors,
