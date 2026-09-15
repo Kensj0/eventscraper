@@ -6,6 +6,7 @@ import { collection, query, where, orderBy, onSnapshot, Timestamp } from 'fireba
 import EventCard from './components/EventCard';
 import EventFilters from './components/EventFilters';
 import SearchBar from './components/SearchBar';
+import { DALARNA_MUNICIPALITIES, isMunicipality, matchesMunicipality } from '@/lib/dalarna';
 import type { Event } from '@/lib/types';
 
 export default function Home() {
@@ -50,7 +51,17 @@ export default function Home() {
     return () => unsubscribe();
   }, []);
 
-  const filteredEvents = events.filter((event) => {
+  // Plats + källnamn slås ihop till en sträng eftersom källan ofta bär orten när
+  // platsen bara är ett lokalnamn ("Brittgården" / "Älvdalens församling").
+  const placeHaystack = (event: Event) => `${event.location} ${event.sourceName}`;
+
+  const matchesCity = (event: Event) => {
+    if (!city.trim()) return true;
+    if (isMunicipality(city)) return matchesMunicipality(placeHaystack(event), city);
+    return placeHaystack(event).toLowerCase().includes(city.trim().toLowerCase());
+  };
+
+  const matchesEverythingButCity = (event: Event) => {
     if (selectedCategory && event.category !== selectedCategory) {
       return false;
     }
@@ -60,10 +71,6 @@ export default function Home() {
       if (!haystack.includes(searchText.toLowerCase())) {
         return false;
       }
-    }
-
-    if (city && !event.location.toLowerCase().includes(city.toLowerCase())) {
-      return false;
     }
 
     if (dateFilter === 'today') {
@@ -81,7 +88,20 @@ export default function Home() {
     }
 
     return true;
-  });
+  };
+
+  // Räknas före ortsfiltret, annars hade den valda kommunen visat sitt eget antal
+  // och alla andra noll.
+  const eventsBeforeCity = events.filter(matchesEverythingButCity);
+  const cityCounts = Object.fromEntries(
+    DALARNA_MUNICIPALITIES.map((municipality) => [
+      municipality,
+      eventsBeforeCity.filter((event) => matchesMunicipality(placeHaystack(event), municipality))
+        .length,
+    ])
+  );
+
+  const filteredEvents = eventsBeforeCity.filter(matchesCity);
 
   const categories = Array.from(new Set(events.map((e) => e.category)));
 
@@ -100,6 +120,7 @@ export default function Home() {
           onSearchTextChange={setSearchText}
           city={city}
           onCityChange={setCity}
+          cityCounts={cityCounts}
         />
 
         <EventFilters
