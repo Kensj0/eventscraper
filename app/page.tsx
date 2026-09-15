@@ -9,6 +9,19 @@ import SearchBar from './components/SearchBar';
 import { DALARNA_MUNICIPALITIES, isMunicipality, matchesMunicipality } from '@/lib/dalarna';
 import type { Event } from '@/lib/types';
 
+// Event som skrevs före timeKnown-fältet saknar det. De datum-bara bland dem
+// ligger på exakt UTC-midnatt (se functions/src/event-time.ts), så de går att
+// känna igen i efterhand — det sparar en bakåtfyllning av produktionsdatan.
+// Nya event litar på det sparade fältet.
+function resolveTimeKnown(data: { timeKnown?: boolean }, startTime: Date): boolean {
+  if (typeof data.timeKnown === 'boolean') return data.timeKnown;
+  return !(
+    startTime.getUTCHours() === 0 &&
+    startTime.getUTCMinutes() === 0 &&
+    startTime.getUTCSeconds() === 0
+  );
+}
+
 export default function Home() {
   const [events, setEvents] = useState<Event[]>([]);
   const [loading, setLoading] = useState(true);
@@ -32,13 +45,15 @@ export default function Home() {
       const eventData: Event[] = [];
       snapshot.forEach((doc) => {
         const data = doc.data();
+        const startTime = data.startTime.toDate();
         eventData.push({
           id: doc.id,
           sourceUrl: data.sourceUrl,
           sourceName: data.sourceName,
           title: data.title,
           description: data.description,
-          startTime: data.startTime.toDate(),
+          startTime,
+          timeKnown: resolveTimeKnown(data, startTime),
           location: data.location,
           category: data.category,
           createdAt: data.createdAt.toDate(),
