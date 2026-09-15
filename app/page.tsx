@@ -5,6 +5,7 @@ import { db } from '@/lib/firebase';
 import { collection, query, where, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
 import EventCard from './components/EventCard';
 import EventFilters from './components/EventFilters';
+import SearchBar from './components/SearchBar';
 import type { Event } from '@/lib/types';
 
 export default function Home() {
@@ -12,6 +13,8 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [dateFilter, setDateFilter] = useState<'today' | 'weekend' | 'all'>('all');
+  const [searchText, setSearchText] = useState('');
+  const [city, setCity] = useState('');
 
   useEffect(() => {
     const eventsCollection = collection(db, 'events');
@@ -52,6 +55,17 @@ export default function Home() {
       return false;
     }
 
+    if (searchText) {
+      const haystack = `${event.title} ${event.description}`.toLowerCase();
+      if (!haystack.includes(searchText.toLowerCase())) {
+        return false;
+      }
+    }
+
+    if (city && !event.location.toLowerCase().includes(city.toLowerCase())) {
+      return false;
+    }
+
     if (dateFilter === 'today') {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
@@ -81,6 +95,13 @@ export default function Home() {
       </header>
 
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        <SearchBar
+          searchText={searchText}
+          onSearchTextChange={setSearchText}
+          city={city}
+          onCityChange={setCity}
+        />
+
         <EventFilters
           categories={categories}
           selectedCategory={selectedCategory}
