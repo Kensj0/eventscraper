@@ -402,7 +402,7 @@ export async function runHTMLIngestion(trigger: 'scheduled' | 'manual' = 'manual
 
     const startDate = parseValidDate(aiResult.start_time);
     if (!startDate) {
-      const msg = `Invalid start_time from AI for "${event.title}": "${aiResult.start_time}"`;
+      const msg = `Invalid start_time from AI for "${event.title}" (${event.url}): "${aiResult.start_time}"`;
       console.warn(msg);
       errors.push(msg);
       itemsSkipped++;
@@ -513,7 +513,7 @@ async function runIngestion(trigger: 'scheduled' | 'manual') {
 
           const startDate = parseValidDate(aiResult.start_time);
           if (!startDate) {
-            const msg = `Invalid start_time from AI for "${item.title}": "${aiResult.start_time}"`;
+            const msg = `Invalid start_time from AI for "${item.title}" (${sourceUrl}): "${aiResult.start_time}"`;
             console.warn(msg);
             errors.push(msg);
             itemsSkipped++;
