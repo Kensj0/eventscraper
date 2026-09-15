@@ -1,6 +1,7 @@
 import axios from 'axios';
 import * as admin from 'firebase-admin';
 import { getEnabledSources, updateSourceStatus, SourceConfig } from './source-config';
+import { hasExplicitTime } from './event-time';
 
 // Svenska kyrkans CalendarAPI (se calendarapi.json-specen Kenny delade,
 // och org-harvesters.ts:harvestSvenskaKyrkan som populerade
@@ -215,6 +216,9 @@ export async function runSvenskaKyrkanIngestion(trigger: 'scheduled' | 'manual' 
         title: event.title,
         description,
         startTime: admin.firestore.Timestamp.fromDate(startDate),
+        // CalendarAPI:t ger normalt riktiga klockslag, men heldagsposter
+        // förekommer — härleds från strängen istället för att antas.
+        timeKnown: hasExplicitTime(event.start),
         location: event.place?.name || source.name,
         category: event.categories?.[0]?.name || 'Kyrka',
         createdAt: admin.firestore.Timestamp.now(),

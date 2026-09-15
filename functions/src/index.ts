@@ -6,6 +6,7 @@ import { scrapeBorlange, scrapeFalun, scrapeLudvika, scrapeRattvik, ScrapedEvent
 import { detailPageAdapterFor } from './html-detail-adapters';
 import { getEnabledSources, updateSourceStatus } from './source-config';
 import { runSvenskaKyrkanIngestion } from './svenska-kyrkan-ingestion';
+import { hasExplicitTime } from './event-time';
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -416,6 +417,7 @@ export async function runHTMLIngestion(trigger: 'scheduled' | 'manual' = 'manual
         title: aiResult.title,
         description: aiResult.description,
         startTime: admin.firestore.Timestamp.fromDate(startDate),
+        timeKnown: hasExplicitTime(aiResult.start_time),
         location: aiResult.location,
         category: aiResult.category,
         createdAt: admin.firestore.Timestamp.now(),
@@ -528,6 +530,7 @@ async function runIngestion(trigger: 'scheduled' | 'manual') {
               title: aiResult.title,
               description: aiResult.description,
               startTime: admin.firestore.Timestamp.fromDate(startDate),
+              timeKnown: hasExplicitTime(aiResult.start_time),
               location: aiResult.location,
               category: aiResult.category,
               createdAt: admin.firestore.Timestamp.now(),
