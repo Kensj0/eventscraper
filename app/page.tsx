@@ -76,19 +76,17 @@ export default function Home() {
     return placeHaystack(event).toLowerCase().includes(city.trim().toLowerCase());
   };
 
-  const matchesEverythingButCity = (event: Event) => {
-    if (selectedCategory && event.category !== selectedCategory) {
-      return false;
-    }
+  const matchesSearch = (event: Event) => {
+    if (!searchText) return true;
+    const haystack = `${event.title} ${event.description}`.toLowerCase();
+    return haystack.includes(searchText.toLowerCase());
+  };
 
-    if (searchText) {
-      const haystack = `${event.title} ${event.description}`.toLowerCase();
-      if (!haystack.includes(searchText.toLowerCase())) {
-        return false;
-      }
-    }
+  const matchesCategory = (event: Event) =>
+    !selectedCategory || event.category === selectedCategory;
 
-    if (dateFilter === 'today') {
+  const matchesDateFilter = (event: Event, filter: 'today' | 'weekend' | 'all') => {
+    if (filter === 'today') {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
       const tomorrow = new Date(today);
@@ -96,14 +94,16 @@ export default function Home() {
       return event.startTime >= today && event.startTime < tomorrow;
     }
 
-    if (dateFilter === 'weekend') {
-      const eventDate = new Date(event.startTime);
-      const dayOfWeek = eventDate.getDay();
+    if (filter === 'weekend') {
+      const dayOfWeek = event.startTime.getDay();
       return dayOfWeek === 5 || dayOfWeek === 6; // Friday or Saturday
     }
 
     return true;
   };
+
+  const matchesEverythingButCity = (event: Event) =>
+    matchesCategory(event) && matchesSearch(event) && matchesDateFilter(event, dateFilter);
 
   // Räknas före ortsfiltret, annars hade den valda kommunen visat sitt eget antal
   // och alla andra noll.
@@ -120,8 +120,29 @@ export default function Home() {
 
   const categories = Array.from(new Set(events.map((e) => e.category)));
 
+  // Räknas givet övriga aktiva filter (samma princip som cityCounts ovan) —
+  // annars visar t.ex. varje annan kategori "0" så fort en kategori är vald.
+  const eventsForDateCounts = events.filter(
+    (event) => matchesCategory(event) && matchesSearch(event)
+  );
+  const dateFilterCounts: Record<'today' | 'weekend' | 'all', number> = {
+    today: eventsForDateCounts.filter((event) => matchesDateFilter(event, 'today')).length,
+    weekend: eventsForDateCounts.filter((event) => matchesDateFilter(event, 'weekend')).length,
+    all: eventsForDateCounts.length,
+  };
+
+  const eventsForCategoryCounts = events.filter(
+    (event) => matchesSearch(event) && matchesDateFilter(event, dateFilter)
+  );
+  const categoryFilterCounts = Object.fromEntries(
+    categories.map((category) => [
+      category,
+      eventsForCategoryCounts.filter((event) => event.category === category).length,
+    ])
+  );
+
   return (
-    <main className="min-h-screen bg-gray-50">
+    <main className="min-h-screen bg-[#FAF8F4]">
       <header className="sticky top-0 z-40 bg-white shadow-sm">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
           <h1 className="text-3xl font-bold text-gray-900">EventScraper</h1>
@@ -144,6 +165,8 @@ export default function Home() {
           onCategoryChange={setSelectedCategory}
           dateFilter={dateFilter}
           onDateFilterChange={setDateFilter}
+          dateFilterCounts={dateFilterCounts}
+          categoryFilterCounts={categoryFilterCounts}
         />
 
         {loading ? (

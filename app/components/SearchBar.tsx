@@ -163,7 +163,7 @@ export default function SearchBar({
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => choose(municipality)}
                   className={`flex cursor-pointer items-center justify-between px-4 py-2 text-sm ${
-                    highlighted === index ? 'bg-blue-50' : ''
+                    highlighted === index ? 'bg-[#FDF1F0]' : ''
                   } ${count === 0 ? 'text-gray-400' : 'text-gray-900'}`}
                 >
                   <span>{municipality}</span>
@@ -179,7 +179,7 @@ export default function SearchBar({
         <button
           type="submit"
           aria-label="Sök"
-          className="flex h-11 w-11 items-center justify-center rounded-full bg-blue-600 text-white transition-colors hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+          className="flex h-11 w-11 items-center justify-center rounded-full bg-[#B5312F] text-white transition-colors hover:bg-[#933B36] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#B5312F] focus-visible:ring-offset-2"
         >
           <Search className="h-5 w-5" aria-hidden="true" />
         </button>
