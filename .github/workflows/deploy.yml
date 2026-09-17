@@ -14,6 +14,8 @@ on:
           - hosting,functions
           - firestore:rules
           - hosting,functions,firestore:rules
+          - firestore
+          - hosting,functions,firestore
 
 jobs:
   deploy:

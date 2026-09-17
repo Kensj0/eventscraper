@@ -226,6 +226,31 @@ async function logIngestionRun(log: IngestionLogData): Promise<void> {
 // frisk körning inte hinner dödas av plattformen innan den ens loggas.
 const INGESTION_RUNTIME_OPTS = { timeoutSeconds: 300 };
 
+// Adminpanelen kan pausa en källtypss dagliga schemaläggning utan
+// omdeploy (config/scheduling-dokumentet, se app/admin/page.tsx). Klockslagen
+// själva är fortfarande hårdkodade nedan — bara på/av är dynamiskt.
+// Fältet saknas eller är inte explicit false => aktiverad, så att en tom
+// databas (första körningen efter denna ändring) beter sig som innan.
+async function isScheduledRunEnabled(field: keyof SchedulingConfig): Promise<boolean> {
+  const snap = await db.collection('config').doc('scheduling').get();
+  return snap.data()?.[field] !== false;
+}
+
+interface SchedulingConfig {
+  rssEnabled: boolean;
+  htmlEnabled: boolean;
+  svenskaKyrkanEnabled: boolean;
+}
+
+// Callable-funktioner (triggerXIngestion nedan) körs bara om anroparen är
+// inloggad via Firebase Auth — onCall verifierar ID-token automatiskt och
+// ger oss context.auth, så vi slipper hantera en hemlighet i klientkoden.
+function requireAdmin(context: functions.https.CallableContext): void {
+  if (!context.auth) {
+    throw new functions.https.HttpsError('unauthenticated', 'Inloggning krävs.');
+  }
+}
+
 // Scheduled trigger (daily at 2 AM)
 export const ingestRSSFeeds = functions
   .region('europe-west1')
@@ -233,6 +258,10 @@ export const ingestRSSFeeds = functions
   .pubsub.schedule('0 2 * * *') // Daily at 2 AM Stockholm time
   .timeZone('Europe/Stockholm')
   .onRun(async () => {
+    if (!(await isScheduledRunEnabled('rssEnabled'))) {
+      console.log('RSS-schemaläggning avstängd via config/scheduling — hoppar över.');
+      return null;
+    }
     return await runIngestion('scheduled');
   });
 
@@ -279,6 +308,10 @@ export const scrapeHTMLSourcesScheduled = functions
   .pubsub.schedule('0 4 * * *')
   .timeZone('Europe/Stockholm')
   .onRun(async () => {
+    if (!(await isScheduledRunEnabled('htmlEnabled'))) {
+      console.log('HTML-schemaläggning avstängd via config/scheduling — hoppar över.');
+      return null;
+    }
     return await runHTMLIngestion('scheduled');
   });
 
@@ -290,6 +323,10 @@ export const ingestSvenskaKyrkanEvents = functions
   .pubsub.schedule('0 3 * * *')
   .timeZone('Europe/Stockholm')
   .onRun(async () => {
+    if (!(await isScheduledRunEnabled('svenskaKyrkanEnabled'))) {
+      console.log('Svenska kyrkan-schemaläggning avstängd via config/scheduling — hoppar över.');
+      return null;
+    }
     return await runSvenskaKyrkanIngestion('scheduled');
   });
 
@@ -306,6 +343,33 @@ export const ingestSvenskaKyrkanEventsManual = functions
 
     const result = await runSvenskaKyrkanIngestion('manual');
     res.status(200).json(result);
+  });
+
+// Callable-motsvarigheter till *Manual-endpointerna ovan, men gated på
+// Firebase Auth (context.auth) istället för INGEST_SECRET_KEY — det är de
+// adminpanelen (app/admin/page.tsx) anropar med "Kör nu"-knapparna.
+export const triggerRSSIngestion = functions
+  .region('europe-west1')
+  .runWith(INGESTION_RUNTIME_OPTS)
+  .https.onCall(async (_data, context) => {
+    requireAdmin(context);
+    return await runIngestion('manual');
+  });
+
+export const triggerHTMLIngestion = functions
+  .region('europe-west1')
+  .runWith(INGESTION_RUNTIME_OPTS)
+  .https.onCall(async (_data, context) => {
+    requireAdmin(context);
+    return await runHTMLIngestion('manual');
+  });
+
+export const triggerSvenskaKyrkanIngestion = functions
+  .region('europe-west1')
+  .runWith(INGESTION_RUNTIME_OPTS)
+  .https.onCall(async (_data, context) => {
+    requireAdmin(context);
+    return await runSvenskaKyrkanIngestion('manual');
   });
 
 // Shared HTML-scraping ingestion logic — samma AI-parsing/dedup-pipeline som RSS.

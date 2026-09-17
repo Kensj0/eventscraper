@@ -18,7 +18,8 @@
     "dedupe-rss-sources": "ts-node scripts/dedupe-rss-sources.ts",
     "list-failed-candidates": "ts-node scripts/list-failed-candidates.ts",
     "promote-html-detail-candidates": "ts-node scripts/promote-html-detail-candidates.ts",
-    "pilot-skolverket": "ts-node scripts/pilot-skolverket.ts"
+    "pilot-skolverket": "ts-node scripts/pilot-skolverket.ts",
+    "create-admin": "ts-node scripts/create-admin.ts"
   },
   "dependencies": {
     "axios": "^1.6.0",
