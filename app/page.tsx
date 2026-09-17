@@ -143,10 +143,21 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-[#FAF8F4]">
-      <header className="sticky top-0 z-40 bg-white shadow-sm">
-        <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
-          <h1 className="text-3xl font-bold text-gray-900">EventScraper</h1>
-          <p className="mt-1 text-gray-600">Hitta lokala event från RSS-flöden</p>
+      <header className="relative isolate overflow-hidden">
+        <div
+          className="absolute inset-0 bg-cover bg-left"
+          style={{ backgroundImage: "url('/hero-banner.jpg')" }}
+          aria-hidden="true"
+        />
+        <div
+          className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/30 to-transparent"
+          aria-hidden="true"
+        />
+        <div className="relative mx-auto flex h-44 max-w-7xl items-center px-4 sm:h-56 sm:px-6 lg:h-64 lg:px-8">
+          <div>
+            <h1 className="text-3xl font-bold text-white drop-shadow-sm sm:text-4xl">EventScraper</h1>
+            <p className="mt-2 text-white/90 drop-shadow-sm">Hitta lokala event från RSS-flöden</p>
+          </div>
         </div>
       </header>
 
