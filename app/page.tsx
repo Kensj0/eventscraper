@@ -2,12 +2,14 @@
 
 import { useEffect, useState } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, query, where, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
+import { collection, doc, query, where, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
 import EventCard from './components/EventCard';
 import EventFilters from './components/EventFilters';
 import SearchBar from './components/SearchBar';
+import HeroBanner from './components/HeroBanner';
 import { DALARNA_MUNICIPALITIES, isMunicipality, matchesMunicipality } from '@/lib/dalarna';
-import type { Event } from '@/lib/types';
+import type { Event, SiteConfig } from '@/lib/types';
+import { DEFAULT_SITE_CONFIG } from '@/lib/types';
 
 // Event som skrevs före timeKnown-fältet saknar det. De datum-bara bland dem
 // ligger på exakt UTC-midnatt (se functions/src/event-time.ts), så de går att
@@ -29,6 +31,20 @@ export default function Home() {
   const [dateFilter, setDateFilter] = useState<'today' | 'weekend' | 'all'>('all');
   const [searchText, setSearchText] = useState('');
   const [city, setCity] = useState('');
+  const [siteConfig, setSiteConfig] = useState<SiteConfig>(DEFAULT_SITE_CONFIG);
+
+  useEffect(() => {
+    return onSnapshot(doc(db, 'config', 'site'), (snap) => {
+      const data = snap.data();
+      if (!data) return;
+      setSiteConfig({
+        bannerImage: data.bannerImage ?? null,
+        bannerX: data.bannerX ?? DEFAULT_SITE_CONFIG.bannerX,
+        bannerY: data.bannerY ?? DEFAULT_SITE_CONFIG.bannerY,
+        bannerScrim: data.bannerScrim ?? DEFAULT_SITE_CONFIG.bannerScrim,
+      });
+    });
+  }, []);
 
   useEffect(() => {
     const eventsCollection = collection(db, 'events');
@@ -143,23 +159,13 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-[#FAF8F4]">
-      <header className="relative isolate overflow-hidden">
-        <div
-          className="absolute inset-0 bg-cover bg-left"
-          style={{ backgroundImage: "url('/hero-banner.jpg')" }}
-          aria-hidden="true"
-        />
-        <div
-          className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/30 to-transparent"
-          aria-hidden="true"
-        />
-        <div className="relative mx-auto flex h-44 max-w-7xl items-center px-4 sm:h-56 sm:px-6 lg:h-64 lg:px-8">
-          <div>
-            <h1 className="text-3xl font-bold text-white drop-shadow-sm sm:text-4xl">EventScraper</h1>
-            <p className="mt-2 text-white/90 drop-shadow-sm">Hitta lokala event från RSS-flöden</p>
-          </div>
-        </div>
-      </header>
+      <HeroBanner
+        imageUrl={siteConfig.bannerImage}
+        x={siteConfig.bannerX}
+        y={siteConfig.bannerY}
+        scrim={siteConfig.bannerScrim}
+        className="h-44 sm:h-56 lg:h-64"
+      />
 
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         <SearchBar
