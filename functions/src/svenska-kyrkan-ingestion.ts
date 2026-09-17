@@ -12,7 +12,13 @@ import { hasExplicitTime } from './event-time';
 // unitId, sparat på source-dokumentets externalIds.ownerId.
 const CALENDAR_API_BASE = 'https://svk-apim-prod.azure-api.net/calendar/v1';
 const REQUEST_TIMEOUT_MS = 15000;
-const MAX_EVENTS_PER_RUN = 10; // samma körnings-budget som RSS/HTML-ingestion i index.ts
+// Höjd 2026-09-17 från 10: med ~17 aktiva församlingar över CalendarAPI:t
+// (en riktig, dedikerad kalender — ingen skrapningskostnad) körde varje
+// enda daglig körning i taket, med en dokumenterad kö på 6-62 dubbletter
+// plus en helt oräknad svans (loopen bryter direkt vid taket, så allt
+// därefter i den varvade listan undersöks inte ens). 10/dag var alltså
+// långt under vad källorna faktiskt levererar.
+const MAX_EVENTS_PER_RUN = 50;
 const EVENTS_PER_OWNER_LIMIT = 20; // CalendarAPI:s "limit"-param, max 50 — gott om marginal per körning
 
 interface CalendarApiEvent {

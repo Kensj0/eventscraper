@@ -45,7 +45,11 @@ const MAX_ITEMS_PER_RUN = 10;
 // så slice(0, 10) skulle alltid ge samma vinnare). Egen, högre gräns för
 // HTML, kombinerat med att blanda källordningen (se shuffle nedan) så alla
 // källor roterar in över flera körningar istället för att svälta permanent.
-const MAX_HTML_ITEMS_PER_RUN = 30;
+// Höjd 2026-09-17 från 30: fortfarande bara en bråkdel av de 118 källorna
+// per dag (~1-8 genuint nya event/körning enligt ingestion_logs, resten var
+// dubbletter/fel), trots shuffle() — 100 ger reell headroom utan att komma
+// i närheten av Cloud Functions 300s-taket (INGESTION_RUNTIME_OPTS nedan).
+const MAX_HTML_ITEMS_PER_RUN = 100;
 
 // Fisher-Yates — ren funktion, muterar inte input. Används för att variera
 // vilka HTML-källor som får plats inom MAX_HTML_ITEMS_PER_RUN mellan
