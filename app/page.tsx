@@ -165,16 +165,29 @@ export default function Home() {
         y={siteConfig.bannerY}
         scrim={siteConfig.bannerScrim}
         className="h-44 sm:h-56 lg:h-64"
+        rightSlot={
+          <SearchBar
+            searchText={searchText}
+            onSearchTextChange={setSearchText}
+            city={city}
+            onCityChange={setCity}
+            cityCounts={cityCounts}
+          />
+        }
       />
 
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
-        <SearchBar
-          searchText={searchText}
-          onSearchTextChange={setSearchText}
-          city={city}
-          onCityChange={setCity}
-          cityCounts={cityCounts}
-        />
+        {/* Under sm ryms sökfältet inte i bannern (se HeroBanner) — samma
+            komponent, samma state, bara synlig i det andra layoutläget. */}
+        <div className="mb-6 sm:hidden">
+          <SearchBar
+            searchText={searchText}
+            onSearchTextChange={setSearchText}
+            city={city}
+            onCityChange={setCity}
+            cityCounts={cityCounts}
+          />
+        </div>
 
         <EventFilters
           categories={categories}
@@ -201,6 +214,12 @@ export default function Home() {
             ))}
           </div>
         )}
+
+        <div className="pt-10 text-right">
+          <a href="/admin" className="text-xs text-gray-300 transition-colors hover:text-gray-400">
+            Logga in
+          </a>
+        </div>
       </div>
     </main>
   );

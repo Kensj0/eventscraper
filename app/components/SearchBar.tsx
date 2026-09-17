@@ -78,7 +78,7 @@ export default function SearchBar({
         setOpen(false);
         cityInputRef.current?.blur();
       }}
-      className="mb-6 flex flex-col overflow-visible rounded-2xl border border-gray-200 bg-white shadow-sm sm:flex-row sm:items-center sm:rounded-full"
+      className="flex flex-col overflow-visible rounded-2xl border border-gray-200 bg-white shadow-sm sm:flex-row sm:items-center sm:rounded-full"
     >
       <div className="flex flex-1 items-center gap-3 px-5 py-3">
         <Search className="h-5 w-5 shrink-0 text-gray-500" aria-hidden="true" />
