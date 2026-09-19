@@ -16,7 +16,25 @@ export type CandidateCategory =
   | 'kyrka'
   | 'ideell-organisation'
   | 'bibliotek'
-  | 'kurs';
+  | 'kurs'
+  // Nöje/uteliv — se functions/scripts/discover-venues.ts. Inget regionalt
+  // register finns för dessa (bekräftat 2026-09-19), så de läggs in som
+  // enskilda, namngivna organisationer istället för att gå via en
+  // region-database som med t.ex. Skolverket.
+  | 'pub-bar'
+  | 'nattklubb'
+  | 'restaurang-scen'
+  | 'camping'
+  | 'djurpark'
+  | 'konsertscen'
+  | 'nojespark'
+  // Hälsa/andlighet — samma avsaknad av register (bekräftat 2026-09-19).
+  | 'tempel'
+  | 'moske'
+  | 'retreat-center'
+  | 'yoga'
+  | 'gym'
+  | 'halsohem';
 
 export type CandidateStatus = 'new' | 'ready-to-ingest' | 'verified' | 'failed';
 
