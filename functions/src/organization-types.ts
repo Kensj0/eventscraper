@@ -7,7 +7,9 @@ export type OrganizationGroup =
   | 'social'
   | 'kommersiell'
   | 'offentlig'
-  | 'hobby';
+  | 'hobby'
+  | 'uteliv'
+  | 'halsa-andlighet';
 
 export type OrganizationType =
   | 'museum'
@@ -29,7 +31,20 @@ export type OrganizationType =
   | 'skola'
   | 'dansforening'
   | 'musikforening'
-  | 'konstforening';
+  | 'konstforening'
+  // uteliv — se functions/scripts/discover-venues.ts
+  | 'pub'
+  | 'nattklubb'
+  | 'camping'
+  | 'djurpark'
+  | 'konsertscen'
+  | 'nojespark'
+  // halsa-andlighet — se functions/scripts/discover-venues.ts
+  | 'buddhistiskt-tempel'
+  | 'moske'
+  | 'retreat-center'
+  | 'yogastudio'
+  | 'halsohem';
 
 export const ORGANIZATION_TYPES: Record<OrganizationGroup, OrganizationType[]> = {
   kulturell: ['museum', 'teater', 'konsertplats', 'biograf'],
@@ -38,6 +53,8 @@ export const ORGANIZATION_TYPES: Record<OrganizationGroup, OrganizationType[]> =
   kommersiell: ['hotell', 'restaurang', 'bar', 'cafe'],
   offentlig: ['bibliotek', 'kommun', 'skola'],
   hobby: ['dansforening', 'musikforening', 'konstforening'],
+  uteliv: ['pub', 'nattklubb', 'camping', 'djurpark', 'konsertscen', 'nojespark'],
+  'halsa-andlighet': ['buddhistiskt-tempel', 'moske', 'retreat-center', 'yogastudio', 'halsohem', 'gym'],
 };
 
 export const ORGANIZATION_GROUPS = Object.keys(ORGANIZATION_TYPES) as OrganizationGroup[];

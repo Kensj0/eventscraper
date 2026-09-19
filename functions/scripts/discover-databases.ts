@@ -154,9 +154,56 @@ const DATABASES: DatabaseCandidate[] = [
     discoveredFrom: `${DISCOVERED} — administrations-/bokningsplattform för dansföreningar och dansarrangörer, oklart om en publik medlemslista finns`,
   },
 
-  // Kommersiell — ingen oberoende regiontäckande databas hittad bortom
-  // Visit Dalarnas egna "äta & dricka"/"boende"-sidor (redan under
-  // visitdalarna.se, som finns som candidate-source sedan DEL 1 Steg 1).
+  // Kommersiell — Visit Dalarnas egna "äta & dricka"/"boende"-sidor
+  // (redan candidate-source sedan DEL 1 Steg 1) plus en riktig campingdatabas
+  // hittad 2026-09-19.
+  {
+    id: 'camping-nu-dalarna',
+    organizationGroup: 'kommersiell',
+    name: 'Camping.nu – Dalarna',
+    url: 'https://camping.nu/dalarna',
+    scrapable: 'yes',
+    hasApi: false,
+    discoveredFrom: 'Manuell research 2026-09-19 — sammanställning av alla campingar i länet Dalarna, en sida per ort',
+  },
+
+  // Kulturell (2026-09-19) — ytterligare en nationell aggregator med
+  // Dalarna-specifik undersida, utöver dethanderidalarna.se.
+  {
+    id: 'vadhanderisverige-dalarna',
+    organizationGroup: 'kulturell',
+    name: 'Vad händer i Sverige – Dalarna evenemangskalender',
+    url: 'https://vadhanderisverige.se/dalarna/evenemangskalender/',
+    scrapable: 'unknown',
+    hasApi: false,
+    discoveredFrom: 'Manuell research 2026-09-19 — nationell aggregator-sajt, redaktionellt innehåll snarare än en strukturerad kalender vid första anblick; behöver kapabilitetstestas som resten',
+  },
+
+  // Nöje/uteliv (2026-09-19) — sökt uttryckligen efter regionala register
+  // för pubar, nattklubbar, restaurangscener, djurparker/nöjesparker och
+  // konsertscener. INGET sådant register existerar för Dalarna: dessa
+  // organisationstyper är för många, för små och för olikartade för att
+  // någon aktör ska hålla en offentlig, heltäckande lista — till skillnad
+  // från skolor (Skolverket) eller församlingar (Svenska kyrkan) finns ingen
+  // motsvarande myndighet eller riksorganisation att fråga. De organisationer
+  // som faktiskt hittades (Dalhalla, Orsa Rovdjurspark, Leksand Sommarland)
+  // är namngivna enskilda venues, inte en databas — de läggs som
+  // candidate-sources direkt i discover-venues.ts, samma mönster som
+  // dethanderidalarna.se-aggregatorn själv.
+
+  // Hälsa/andlighet (2026-09-19) — motsvarande sökning gjord för
+  // buddhistiska tempel, moskéer, retreat-center, yogastudior, gym och
+  // hälsohem. Bekräftat: Sverige har INGET officiellt register över
+  // moskéer eller tempel (Myndigheten för stöd till trossamfund för bara
+  // statistik på samfundsnivå, inte en sökbar lokal-lista; Wikipedias
+  // "Lista över moskéer i Sverige" är crowdsourced och har ingen träff i
+  // Dalarna specifikt). Yoga/retreat-marknaden i Dalarna syns bara via
+  // kommersiella bokningsplattformar (BookYogaRetreats, BookRetreats) —
+  // samma typ av databasrätts-/skrapningsproblem som Eventbrite, se
+  // tidigare juridiska bedömning i projektet. Ingen databas läggs till för
+  // denna grupp. Enskilda yogastudior/retreat-center måste hittas och läggas
+  // in manuellt en och en om/när de blir relevanta, det finns inget register
+  // att gå via.
 ];
 
 async function main() {
