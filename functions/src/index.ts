@@ -2,7 +2,15 @@ import * as functions from 'firebase-functions';
 import * as admin from 'firebase-admin';
 import Parser from 'rss-parser';
 import axios from 'axios';
-import { scrapeBorlange, scrapeFalun, scrapeLudvika, scrapeRattvik, ScrapedEvent } from './html-scraper';
+import {
+  scrapeBorlange,
+  scrapeFalun,
+  scrapeLudvika,
+  scrapeRattvik,
+  scrapeOrsaGronklitt,
+  scrapeLeksandSommarland,
+  ScrapedEvent,
+} from './html-scraper';
 import { detailPageAdapterFor } from './html-detail-adapters';
 import { getEnabledSources, updateSourceStatus } from './source-config';
 import { runSvenskaKyrkanIngestion } from './svenska-kyrkan-ingestion';
@@ -34,6 +42,8 @@ const HTML_SCRAPERS: Record<string, () => Promise<ScrapedEvent[]>> = {
   'falun-html': scrapeFalun,
   'ludvika-html': scrapeLudvika,
   'rattvik-html': scrapeRattvik,
+  'orsa-rovdjurspark-html': scrapeOrsaGronklitt,
+  'leksand-sommarland-html': scrapeLeksandSommarland,
 };
 
 const parser = new Parser();

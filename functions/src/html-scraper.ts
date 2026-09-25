@@ -27,6 +27,15 @@ import * as cheerio from 'cheerio';
 //    istället för att låtsas ha fungerande selektorer. Att skrapa den
 //    riktiga datan kräver en headless browser (t.ex. Puppeteer), vilket är
 //    utanför scopet för den här Cloud Function-baserade lösningen.
+//  - Orsa Grönklitt (2026-09-20, källupptäckt DEL 1/2): "entry event"-kort,
+//    server-renderad HTML, stabila klassnamn. Datumet är fritext utan år
+//    ("24-1" + "okt. - nov.") — skickas vidare till AI-parsern istället för
+//    att regex-gissas, samma mönster som Ludvika.
+//  - Leksand Sommarland (2026-09-20): "Händer i parken"-sidan listar bara
+//    återkommande dagsaktiviteter ("Varje dag" + klockslag), inga diskreta
+//    kalenderdatum. scrapeLeksandSommarland() returnerar en tom lista med
+//    förklarande logg, samma princip som Rättvik men annan orsak (fel typ
+//    av data, inte ett JS-renderingsproblem).
 
 export interface ScrapedEvent {
   title: string;
@@ -277,6 +286,71 @@ export async function scrapeLudvika(): Promise<ScrapedEvent[]> {
   }
 
   return events;
+}
+
+export async function scrapeOrsaGronklitt(): Promise<ScrapedEvent[]> {
+  const events: ScrapedEvent[] = [];
+  const baseUrl = 'https://www.orsagronklitt.se';
+
+  try {
+    const html = await fetchHtml(`${baseUrl}/evenemang/`);
+    const $ = cheerio.load(html);
+
+    $('.entry.event')
+      .slice(0, SITE_ITEM_LIMIT)
+      .each((_i, elem) => {
+        const $item = $(elem);
+        const title = $item.find('.entry-title').first().text().trim();
+        // Datumet i kortet är fritext utan år, t.ex. "24-1" + "okt. - nov."
+        // (dag-dag, månad-månad) — inget att parsa till ISO med regex utan
+        // att gissa. Bifogas i beskrivningen och löses av AI-parsern
+        // (callAI i index.ts), samma mönster som Ludvika.
+        const dateText = $item.find('.entry-date').first().text().replace(/\s+/g, ' ').trim();
+        const description = $item.find('.entry-content p').first().text().trim();
+        const metaSpans = $item
+          .find('.entry-meta__item span')
+          .map((_j, el) => $(el).text().trim())
+          .get();
+        const location = metaSpans[1] || 'Orsa Grönklitt';
+        // Ingen <a href> på kortet — länken sitter i en onclick-hanterare
+        // på "Läs mer"-knappen (window.open('/evenemang/...')).
+        const onclick = $item.find('.entry-footer button').first().attr('onclick') || '';
+        const pathMatch = onclick.match(/window\.open\('([^']+)'/);
+        const url = pathMatch ? new URL(pathMatch[1], baseUrl).href : '';
+
+        if (!title || !url) return;
+
+        events.push({
+          title,
+          description: dateText ? `${description}\nDatum: ${dateText}` : description,
+          startTime: '',
+          location,
+          url,
+          sourceName: 'Orsa Grönklitt',
+        });
+      });
+
+    console.log(`✓ Orsa Grönklitt: ${events.length} event hittade (osäker datumextraktion, se kommentar)`);
+  } catch (error) {
+    console.error('Orsa Grönklitt scrape failed:', error);
+  }
+
+  return events;
+}
+
+export async function scrapeLeksandSommarland(): Promise<ScrapedEvent[]> {
+  // leksandsommarland.se/hander-i-parken/ listar bara återkommande dagliga
+  // parkaktiviteter (Billy-show, Pooldisco, meet-and-greets), alla taggade
+  // "Varje dag" + ett klockslag — inga diskreta kalenderdatum. Det är ett
+  // dagsschema för en anläggning, inte "evenemang man kan gå till en viss
+  // dag", vilket är precis vad callAI:s is_event-filter är byggt för att
+  // avvisa. Att skicka in det ändå skulle bara ge tomma/felaktiga resultat.
+  // Ingen headless-browser-begränsning här (till skillnad från Rättvik) —
+  // sidan är server-renderad, innehållet är bara fel typ av data.
+  console.warn(
+    'Leksand Sommarland: hoppar över — "Händer i parken" listar återkommande dagsaktiviteter utan kalenderdatum, inga riktiga event att extrahera.'
+  );
+  return [];
 }
 
 export async function scrapeRattvik(): Promise<ScrapedEvent[]> {
