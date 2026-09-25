@@ -8,7 +8,7 @@ import * as admin from 'firebase-admin';
 import { getCandidateSources } from '../src/candidate-sources';
 import { testCapability } from '../src/capability-test';
 
-admin.initializeApp();
+admin.initializeApp({ projectId: 'eventscraper-f0588' });
 
 const CONCURRENCY = 8;
 

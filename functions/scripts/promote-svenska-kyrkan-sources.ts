@@ -10,7 +10,7 @@
 import * as admin from 'firebase-admin';
 import { getCandidateSources } from '../src/candidate-sources';
 
-admin.initializeApp();
+admin.initializeApp({ projectId: 'eventscraper-f0588' });
 
 async function main() {
   const candidates = await getCandidateSources();

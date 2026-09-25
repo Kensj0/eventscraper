@@ -4,7 +4,7 @@
 // skrivning till Firestore — säkert att köra när som helst.
 import * as admin from 'firebase-admin';
 
-admin.initializeApp();
+admin.initializeApp({ projectId: 'eventscraper-f0588' });
 
 async function main() {
   const snapshot = await admin

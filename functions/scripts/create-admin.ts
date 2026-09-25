@@ -13,7 +13,7 @@
 import * as admin from 'firebase-admin';
 import * as readline from 'readline';
 
-admin.initializeApp();
+admin.initializeApp({ projectId: 'eventscraper-f0588' });
 
 const CODE_ENTER_LF = 10;
 const CODE_ENTER_CR = 13;

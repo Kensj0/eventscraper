@@ -14,7 +14,7 @@
 const fs = require('fs');
 const admin = require('firebase-admin');
 
-admin.initializeApp();
+admin.initializeApp({ projectId: 'eventscraper-f0588' });
 const db = admin.firestore();
 
 const CHECK_TYPE = process.env.CHECK_TYPE || 'rss';
