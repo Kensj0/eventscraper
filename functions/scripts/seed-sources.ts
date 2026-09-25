@@ -15,7 +15,7 @@
 import * as admin from 'firebase-admin';
 import { SourceConfig } from '../src/source-config';
 
-admin.initializeApp();
+admin.initializeApp({ projectId: 'eventscraper-f0588' });
 const db = admin.firestore();
 
 type SeedSource = Omit<SourceConfig, 'lastSuccess' | 'lastError' | 'eventsFound'>;

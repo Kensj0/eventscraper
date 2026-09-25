@@ -17,7 +17,7 @@ import * as admin from 'firebase-admin';
 import axios from 'axios';
 import { upsertCandidateSources } from '../src/candidate-sources';
 
-admin.initializeApp();
+admin.initializeApp({ projectId: 'eventscraper-f0588' });
 
 const API_BASE = 'https://api.skolverket.se/skolenhetsregistret/v2';
 const REQUEST_HEADERS = { 'User-Agent': 'Mozilla/5.0 (compatible; EventScraperDalarna/1.0)' };

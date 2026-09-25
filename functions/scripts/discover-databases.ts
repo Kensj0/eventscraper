@@ -21,7 +21,7 @@ import * as admin from 'firebase-admin';
 import { upsertRegionDatabases } from '../src/region-databases';
 import type { OrganizationGroup } from '../src/organization-types';
 
-admin.initializeApp();
+admin.initializeApp({ projectId: 'eventscraper-f0588' });
 
 const DISCOVERED = 'Manuell research 2026-09-12 (WebSearch per organisationsgrupp), HTTP-verifierad vid seed';
 

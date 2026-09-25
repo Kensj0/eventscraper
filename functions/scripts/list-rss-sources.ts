@@ -4,7 +4,7 @@
 // loggen 2026-09-13).
 import * as admin from 'firebase-admin';
 
-admin.initializeApp();
+admin.initializeApp({ projectId: 'eventscraper-f0588' });
 
 async function main() {
   const snapshot = await admin.firestore().collection('sources').where('method', '==', 'rss').get();

@@ -15,7 +15,7 @@ import * as admin from 'firebase-admin';
 import { upsertCandidateSources } from '../src/candidate-sources';
 import type { CandidateCategory } from '../src/candidate-sources';
 
-admin.initializeApp();
+admin.initializeApp({ projectId: 'eventscraper-f0588' });
 
 const DISCOVERED = 'Manuell research 2026-09-19 — enskild namngiven organisation, inget regionalt register finns för denna kategori (se discover-databases.ts)';
 

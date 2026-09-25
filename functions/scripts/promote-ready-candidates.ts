@@ -19,7 +19,7 @@
 import * as admin from 'firebase-admin';
 import { getCandidateSources } from '../src/candidate-sources';
 
-admin.initializeApp();
+admin.initializeApp({ projectId: 'eventscraper-f0588' });
 
 function normalize(url: string): string {
   return url

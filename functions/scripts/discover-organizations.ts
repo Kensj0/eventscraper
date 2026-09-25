@@ -17,7 +17,7 @@ import { getRegionDatabases } from '../src/region-databases';
 import { upsertCandidateSources } from '../src/candidate-sources';
 import { HARVESTERS } from '../src/org-harvesters';
 
-admin.initializeApp();
+admin.initializeApp({ projectId: 'eventscraper-f0588' });
 
 async function main() {
   const databases = await getRegionDatabases('Dalarna');
