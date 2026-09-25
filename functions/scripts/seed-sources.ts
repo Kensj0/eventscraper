@@ -1,6 +1,9 @@
 // Seedar Firestore-collectionen "sources" med de nuvarande 4 RSS-feederna
-// och 4 HTML-scraperna för Dalarna, så att index.ts:s getEnabledSources()
+// och 6 HTML-scraperna för Dalarna, så att index.ts:s getEnabledSources()
 // hittar samma källor som tidigare låg hårdkodade i RSS_FEEDS/HTML_SCRAPERS.
+// orsa-rovdjurspark-html och leksand-sommarland-html tillkom 2026-09-20 via
+// källupptäckt DEL 1/2 (discover-venues.ts hittade venuen, ingen RSS/iCal
+// fanns, så bespoke HTML-scraper i html-scraper.ts istället).
 //
 // Körning mot emulator:
 //   firebase emulators:start --only firestore
@@ -78,6 +81,22 @@ const SOURCES: SeedSource[] = [
     id: 'rattvik-html',
     name: 'Rättvik Kommun (HTML)',
     url: 'https://www.rattvik.se',
+    region: 'Dalarna',
+    method: 'html',
+    enabled: true,
+  },
+  {
+    id: 'orsa-rovdjurspark-html',
+    name: 'Orsa Rovdjurspark (HTML)',
+    url: 'https://www.orsagronklitt.se/evenemang/',
+    region: 'Dalarna',
+    method: 'html',
+    enabled: true,
+  },
+  {
+    id: 'leksand-sommarland-html',
+    name: 'Leksand Sommarland (HTML)',
+    url: 'https://leksandsommarland.se/hander-i-parken/',
     region: 'Dalarna',
     method: 'html',
     enabled: true,
