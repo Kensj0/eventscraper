@@ -38,6 +38,12 @@ jobs:
             "https://europe-west1-${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}.cloudfunctions.net/scrapeHTMLSources?key=test-local" \
             --max-time 300
 
+      - name: Trigga ingestDethanderEventsManual
+        run: |
+          curl -sf \
+            "https://europe-west1-${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}.cloudfunctions.net/ingestDethanderEventsManual?key=test-local" \
+            --max-time 300
+
       - name: Skriv Google service account-nyckel till fil
         run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > /tmp/gcp-key.json
 
@@ -70,3 +76,11 @@ jobs:
         env:
           GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
           CHECK_TYPE: html
+
+      - name: Kontrollera senaste Det händer i Dalarna-ingestion-logg
+        working-directory: functions
+        run: npm run check-ingestion
+        continue-on-error: true
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
+          CHECK_TYPE: dethander-dalarna

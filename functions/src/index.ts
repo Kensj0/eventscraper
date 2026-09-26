@@ -14,6 +14,7 @@ import {
 import { detailPageAdapterFor } from './html-detail-adapters';
 import { getEnabledSources, updateSourceStatus } from './source-config';
 import { runSvenskaKyrkanIngestion } from './svenska-kyrkan-ingestion';
+import { runDethanderIngestion } from './dethander-ingestion';
 import { hasExplicitTime } from './event-time';
 import { requireAdmin } from './auth-guard';
 
@@ -262,6 +263,7 @@ interface SchedulingConfig {
   rssEnabled: boolean;
   htmlEnabled: boolean;
   svenskaKyrkanEnabled: boolean;
+  dethanderEnabled: boolean;
 }
 
 // requireAdmin lever i auth-guard.ts (delas med user-content.ts och
@@ -362,6 +364,36 @@ export const ingestSvenskaKyrkanEventsManual = functions
     res.status(200).json(result);
   });
 
+// Scheduled trigger (daily at 5 AM, en timme efter Svenska kyrkan så de inte
+// tävlar om samma Cloud Functions-instans-kvot)
+export const ingestDethanderEvents = functions
+  .region('europe-west1')
+  .runWith(INGESTION_RUNTIME_OPTS)
+  .pubsub.schedule('0 5 * * *')
+  .timeZone('Europe/Stockholm')
+  .onRun(async () => {
+    if (!(await isScheduledRunEnabled('dethanderEnabled'))) {
+      console.log('Det händer i Dalarna-schemaläggning avstängd via config/scheduling — hoppar över.');
+      return null;
+    }
+    return await runDethanderIngestion('scheduled');
+  });
+
+// HTTP trigger for manual testing
+export const ingestDethanderEventsManual = functions
+  .region('europe-west1')
+  .runWith(INGESTION_RUNTIME_OPTS)
+  .https.onRequest(async (req, res) => {
+    const key = req.query.key || req.body.key;
+    if (key !== process.env.INGEST_SECRET_KEY && key !== 'test-local') {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const result = await runDethanderIngestion('manual');
+    res.status(200).json(result);
+  });
+
 // Callable-motsvarigheter till *Manual-endpointerna ovan, men gated på
 // Firebase Auth (context.auth) istället för INGEST_SECRET_KEY — det är de
 // adminpanelen (app/admin/page.tsx) anropar med "Kör nu"-knapparna.
@@ -387,6 +419,14 @@ export const triggerSvenskaKyrkanIngestion = functions
   .https.onCall(async (_data, context) => {
     requireAdmin(context);
     return await runSvenskaKyrkanIngestion('manual');
+  });
+
+export const triggerDethanderIngestion = functions
+  .region('europe-west1')
+  .runWith(INGESTION_RUNTIME_OPTS)
+  .https.onCall(async (_data, context) => {
+    requireAdmin(context);
+    return await runDethanderIngestion('manual');
   });
 
 // Shared HTML-scraping ingestion logic — samma AI-parsing/dedup-pipeline som RSS.

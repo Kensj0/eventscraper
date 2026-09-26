@@ -84,18 +84,20 @@ export const DEFAULT_SITE_CONFIG: SiteConfig = {
   bannerScrim: 40,
 };
 
-export type IngestionType = 'rss' | 'html' | 'svenska-kyrkan-calendar';
+export type IngestionType = 'rss' | 'html' | 'svenska-kyrkan-calendar' | 'dethander-dalarna';
 
 export interface SchedulingConfig {
   rssEnabled: boolean;
   htmlEnabled: boolean;
   svenskaKyrkanEnabled: boolean;
+  dethanderEnabled: boolean;
 }
 
 export const DEFAULT_SCHEDULING_CONFIG: SchedulingConfig = {
   rssEnabled: true,
   htmlEnabled: true,
   svenskaKyrkanEnabled: true,
+  dethanderEnabled: true,
 };
 
 export interface IngestionLog {
