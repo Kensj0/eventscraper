@@ -101,11 +101,11 @@ Svara ENDAST med den omskrivna texten, ingen extra formatering eller citattecken
   }
 }
 
-async function isDuplicateSourceUrl(sourceUrl: string): Promise<boolean> {
+async function isDuplicateExternalId(externalId: string): Promise<boolean> {
   const snapshot = await admin
     .firestore()
     .collection('events')
-    .where('sourceUrl', '==', sourceUrl)
+    .where('externalId', '==', externalId)
     .limit(1)
     .get();
   return !snapshot.empty;
@@ -187,15 +187,20 @@ export async function runSvenskaKyrkanIngestion(trigger: 'scheduled' | 'manual' 
     if (processed >= MAX_EVENTS_PER_RUN) break;
 
     // CalendarAPI ger ingen garanterad publik webbsida per event (till
-    // skillnad från RSS/HTML) — links[] är valfri. Ett stabilt syntetiskt
-    // id (prefixat så det aldrig krockar med en riktig url) håller
-    // isDuplicateSourceUrl fungerande ändå.
-    const sourceUrl = event.links?.[0]?.url || `svenska-kyrkan-calendar:${event.id}`;
+    // skillnad från RSS/HTML) — links[] är valfri, och saknas i praktiken
+    // för de flesta events. externalId är ett stabilt syntetiskt id
+    // (prefixat så det aldrig krockar med en riktig url) som ENDAST driver
+    // dedupe — sourceUrl är däremot alltid en riktig, klickbar länk (annars
+    // hade EventCard.tsx renderat externalId rätt av som en död länk, som
+    // hände för ~560 av 769 events innan denna fix). Utan links[] används
+    // församlingens egen webbplats (source.url) som näst bästa länk.
+    const externalId = `svenska-kyrkan-calendar:${event.id}`;
+    const sourceUrl = event.links?.[0]?.url || source.url;
 
-    if (seenUrls.has(sourceUrl)) duplicateUrlsWithinRun++;
-    seenUrls.add(sourceUrl);
+    if (seenUrls.has(externalId)) duplicateUrlsWithinRun++;
+    seenUrls.add(externalId);
 
-    if (await isDuplicateSourceUrl(sourceUrl)) {
+    if (await isDuplicateExternalId(externalId)) {
       skipped++;
       continue;
     }
@@ -218,6 +223,7 @@ export async function runSvenskaKyrkanIngestion(trigger: 'scheduled' | 'manual' 
     try {
       await db.collection('events').add({
         sourceUrl,
+        externalId,
         sourceName: source.name,
         title: event.title,
         description,
