@@ -2,6 +2,7 @@ import axios from 'axios';
 import * as admin from 'firebase-admin';
 import { getEnabledSources, updateSourceStatus, SourceConfig } from './source-config';
 import { hasExplicitTime } from './event-time';
+import { rewriteDescription } from './description-rewriter';
 
 // Svenska kyrkans CalendarAPI (se calendarapi.json-specen Kenny delade,
 // och org-harvesters.ts:harvestSvenskaKyrkan som populerade
@@ -49,57 +50,9 @@ async function searchEvents(ownerId: string): Promise<CalendarApiEvent[]> {
   return (res.data.result as CalendarApiEvent[]) || [];
 }
 
-// Godkänt designbeslut från DEL 1 (se del1-source-adapter-design-minnet):
-// beskrivningen får ALDRIG sparas ordagrann av juridiska skäl, oavsett hur
-// strukturerad källan är — så till skillnad från title/start/location (som
-// tas rakt av här, redan strukturerade och inte upphovsrättskänsliga) måste
-// description alltid gå genom en AI-omskrivning. Misslyckas det (ingen
-// nyckel, AI-fel) returneras null och eventet HOPPAS ÖVER — att falla
-// tillbaka på originaltexten hade varit exakt det beslutet förbjuder.
-// En tom originalbeskrivning har dock inget ordagrant att skydda, så den
-// får passera direkt utan AI-anrop.
-async function rewriteDescription(title: string, rawDescription: string): Promise<string | null> {
-  if (!rawDescription.trim()) return '';
-
-  const apiKey = process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY;
-  if (!apiKey) return null;
-
-  const prompt = `Skriv om följande evenemangsbeskrivning med egna ord på svenska, max 2 meningar. Återge INTE originaltexten ordagrant.
-
-Titel: ${title}
-Originalbeskrivning: ${rawDescription.substring(0, 500)}
-
-Svara ENDAST med den omskrivna texten, ingen extra formatering eller citattecken.`;
-
-  try {
-    if (process.env.ANTHROPIC_API_KEY) {
-      const response = await axios.post(
-        'https://api.anthropic.com/v1/messages',
-        { model: 'claude-haiku-4-5-20251001', max_tokens: 150, messages: [{ role: 'user', content: prompt }] },
-        {
-          headers: {
-            'x-api-key': apiKey,
-            'anthropic-version': '2023-06-01',
-            'content-type': 'application/json',
-          },
-        }
-      );
-      const content = response.data.content[0];
-      return content.type === 'text' ? content.text.trim() : null;
-    } else {
-      const response = await axios.post(
-        'https://api.openai.com/v1/chat/completions',
-        { model: 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }], temperature: 0.3 },
-        { headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' } }
-      );
-      const text = response.data.choices[0]?.message?.content;
-      return typeof text === 'string' ? text.trim() : null;
-    }
-  } catch (error) {
-    console.error('rewriteDescription misslyckades:', error);
-    return null;
-  }
-}
+// rewriteDescription flyttad till description-rewriter.ts 2026-09-26 —
+// dethander-ingestion.ts (samma "strukturerad källa, ordagrant förbjudet"-
+// situation) behöver den också, se den filens kommentar för resonemanget.
 
 async function isDuplicateExternalId(externalId: string): Promise<boolean> {
   const snapshot = await admin

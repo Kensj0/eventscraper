@@ -38,6 +38,13 @@ const SOURCE_TYPES: SourceTypeDef[] = [
     description: 'Dagligen 03:00',
     callableName: 'triggerSvenskaKyrkanIngestion',
   },
+  {
+    key: 'dethanderEnabled',
+    logType: 'dethander-dalarna',
+    title: 'Det händer i Dalarna',
+    description: 'Dagligen 05:00',
+    callableName: 'triggerDethanderIngestion',
+  },
 ];
 
 function formatRelativeTime(date: Date): string {
@@ -171,7 +178,7 @@ export default function ScrapingPanel() {
         Kör en källtyp manuellt, eller pausa dess dagliga automatkörning.
       </p>
 
-      <div className="mt-4 grid gap-4 md:grid-cols-3">
+      <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {SOURCE_TYPES.map((def) => (
           <SourceCard key={def.key} def={def} />
         ))}

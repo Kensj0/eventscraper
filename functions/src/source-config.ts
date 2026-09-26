@@ -5,7 +5,7 @@ import * as admin from 'firebase-admin';
 // utan en ny deploy. "method" täcker redan de fyra strategier DEL 1
 // (functions/src/sources/, pausad tills en riktig JSON-LD/iCal-källa finns)
 // är tänkt att implementera — idag används bara 'rss' och 'html'.
-export type SourceMethod = 'jsonld' | 'ical' | 'rss' | 'html' | 'svenska-kyrkan-calendar';
+export type SourceMethod = 'jsonld' | 'ical' | 'rss' | 'html' | 'svenska-kyrkan-calendar' | 'dethander-dalarna';
 
 export interface SourceConfig {
   id: string;
