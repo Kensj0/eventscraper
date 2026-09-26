@@ -1,50 +1,87 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Sedan publik självregistrering infördes (app/lagg-till-event) är
+    // "inloggad" INTE längre samma sak som "admin" — vilken publik
+    // besökare som helst kan skapa ett konto. Admin-status kommer bara
+    // från admin:true-claimet som functions/scripts/create-admin.ts sätter
+    // en gång per adminkonto; ingen klient kan sätta det själv.
+    function isAdmin() {
+      return request.auth != null && request.auth.token.admin == true;
+    }
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // Publicerade event är den enda collectionen vanliga besökare ser.
+    // Skrivs ALDRIG direkt av klienten, inte ens av admin — bara via
+    // approveEventSubmission (functions/src/index.ts) eller
+    // ingestion-pipelinen (admin SDK, kringgår dessa regler helt). Det
+    // håller kvar en enda, redan testad skrivväg till det publika innehållet.
     match /events/{document=**} {
       allow read: if true;
       allow create, update, delete: if false;
     }
 
-    // Källkonfiguration är bara till för Cloud Functions (admin SDK, som
-    // kringgår dessa regler helt) — ingen klient ska kunna läsa eller
-    // ändra vilka källor som är aktiva.
+    // Källkonfiguration — adminpanelen (SourceManager) behöver kunna
+    // lista/redigera/aktivera/ta bort källor direkt. Fortfarande stängd
+    // för vanliga publika konton.
     match /sources/{document=**} {
-      allow read, write: if false;
+      allow read, write: if isAdmin();
     }
 
-    // Kandidat-organisationer från källupptäckten (DEL 1/DEL 2) — samma
-    // princip som "sources": bara Cloud Functions/admin-skript ska nå den.
+    // Kandidat-organisationer från källupptäckten (DEL 1/DEL 2) OCH
+    // användarinskickade "eventlänkar" (samma collection, se
+    // functions/src/candidate-sources.ts — submittedBy skiljer ut dem). En
+    // inloggad användare får bara skapa SIN EGEN kandidat-post med
+    // status:'new' och inget annat fält satt än det formuläret faktiskt
+    // fyller i — allt annat (testning, godkännande, redigering) är admin.
     match /candidate-sources/{document=**} {
-      allow read, write: if false;
+      allow read: if isAdmin() || isOwner(resource.data.submittedBy);
+      allow create: if isOwner(request.resource.data.submittedBy)
+        && request.resource.data.status == 'new'
+        && request.resource.data.type == 'anvandarinskickad'
+        && request.resource.data.keys().hasOnly(['name', 'url', 'region', 'type', 'source', 'submittedBy', 'submittedByEmail', 'createdAt', 'status']);
+      allow update, delete: if isAdmin();
     }
 
     // Databaser (föreningsregister, kataloger, API:er) som källupptäckten
-    // hittat per region/organisationstyp — samma princip som ovan.
+    // hittat per region/organisationstyp — bara Cloud Functions/admin-skript.
     match /region-databases/{document=**} {
       allow read, write: if false;
     }
 
+    // Enskilda, manuellt inskickade event som väntar på admin-granskning
+    // (app/lagg-till-event). En användare får bara skapa/läsa sina EGNA
+    // inskick, aldrig ändra status själv (bara admin godkänner/avvisar via
+    // approveEventSubmission/rejectEventSubmission).
+    match /event-submissions/{document=**} {
+      allow read: if isAdmin() || isOwner(resource.data.submittedBy);
+      allow create: if isOwner(request.resource.data.submittedBy)
+        && request.resource.data.status == 'pending'
+        && request.resource.data.keys().hasOnly(['title', 'description', 'startTime', 'location', 'category', 'sourceUrl', 'submittedBy', 'submittedByEmail', 'status', 'createdAt']);
+      allow update, delete: if isAdmin();
+    }
+
     // Bannerbild + placering för sidhuvudet (app/components/HeroBanner.tsx).
-    // Publikt läsbar (den publika sidan renderar den), men bara inloggad
-    // admin (app/admin/page.tsx) får ändra den. Enda Firebase Auth-kontot
-    // som finns är adminkontot (se functions/scripts/create-admin.ts) — det
-    // finns ingen självregistrering, så "inloggad" == admin.
+    // Publikt läsbar (den publika sidan renderar den), men bara admin
+    // (app/admin/page.tsx) får ändra den.
     match /config/site {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if isAdmin();
     }
 
     // På/av för de schemalagda ingestion-körningarna (functions/src/index.ts).
     // Behöver inte vara publikt läsbar — bara adminpanelen använder den.
     match /config/scheduling {
-      allow read, write: if request.auth != null;
+      allow read, write: if isAdmin();
     }
 
     // Skrivs bara av Cloud Functions (admin SDK), men adminpanelen läser den
     // för att visa senaste körning per källtyp.
     match /ingestion_logs/{document=**} {
-      allow read: if request.auth != null;
+      allow read: if isAdmin();
       allow write: if false;
     }
   }

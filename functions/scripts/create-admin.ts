@@ -87,18 +87,29 @@ async function main() {
   const confirmPassword = await askHidden('Bekräfta lösenord: ');
   if (password !== confirmPassword) throw new Error('Lösenorden matchar inte.');
 
+  let uid: string;
   try {
     const existing = await admin.auth().getUserByEmail(email);
     await admin.auth().updateUser(existing.uid, { password });
+    uid = existing.uid;
     console.log(`Lösenordet uppdaterat för befintligt konto: ${email}`);
   } catch (error) {
     if ((error as { code?: string }).code === 'auth/user-not-found') {
       const user = await admin.auth().createUser({ email, password });
-      console.log(`Adminkonto skapat: ${email} (uid: ${user.uid})`);
+      uid = user.uid;
+      console.log(`Adminkonto skapat: ${email} (uid: ${uid})`);
     } else {
       throw error;
     }
   }
+
+  // admin:true-claimet är det enda som skiljer ett adminkonto från ett
+  // vanligt publikt konto sedan självregistrering infördes (se
+  // app/lagg-till-event) — requireAdmin() i functions/src/index.ts och
+  // isAdmin() i firestore.rules kollar båda det här claimet, aldrig bara
+  // "är inloggad". setCustomUserClaims är idempotent, säkert att köra om.
+  await admin.auth().setCustomUserClaims(uid, { admin: true });
+  console.log('admin:true-claimet satt.');
 }
 
 main()

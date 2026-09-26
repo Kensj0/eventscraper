@@ -5,6 +5,10 @@ import { onAuthStateChanged, signInWithEmailAndPassword, signOut, type User } fr
 import { auth } from '@/lib/firebase';
 import BannerEditor from './BannerEditor';
 import ScrapingPanel from './ScrapingPanel';
+import SourceManager from './SourceManager';
+import SubmissionQueue from './SubmissionQueue';
+import EventLinkQueue from './EventLinkQueue';
+import UserManager from './UserManager';
 
 function LoginForm() {
   const [email, setEmail] = useState('');
@@ -97,6 +101,10 @@ function Dashboard({ user }: { user: User }) {
       <div className="mx-auto max-w-5xl space-y-6 px-4 py-8 sm:px-6">
         <BannerEditor />
         <ScrapingPanel />
+        <SubmissionQueue />
+        <EventLinkQueue />
+        <SourceManager />
+        <UserManager />
       </div>
     </main>
   );

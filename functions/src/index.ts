@@ -15,9 +15,17 @@ import { detailPageAdapterFor } from './html-detail-adapters';
 import { getEnabledSources, updateSourceStatus } from './source-config';
 import { runSvenskaKyrkanIngestion } from './svenska-kyrkan-ingestion';
 import { hasExplicitTime } from './event-time';
+import { requireAdmin } from './auth-guard';
 
 admin.initializeApp();
 const db = admin.firestore();
+
+// Publik eventinlämning + adminhantering av källor/användare (app/lagg-till-event,
+// admin-panelens nya paneler) — egna filer, re-exporterade här så
+// `firebase deploy --only functions` ser dem (Firebase v1 kräver att varje
+// deploybar funktion når topnivå-exports i index.ts).
+export * from './user-content';
+export * from './admin-users';
 
 interface AIResponse {
   is_event: boolean;
@@ -256,14 +264,9 @@ interface SchedulingConfig {
   svenskaKyrkanEnabled: boolean;
 }
 
-// Callable-funktioner (triggerXIngestion nedan) körs bara om anroparen är
-// inloggad via Firebase Auth — onCall verifierar ID-token automatiskt och
-// ger oss context.auth, så vi slipper hantera en hemlighet i klientkoden.
-function requireAdmin(context: functions.https.CallableContext): void {
-  if (!context.auth) {
-    throw new functions.https.HttpsError('unauthenticated', 'Inloggning krävs.');
-  }
-}
+// requireAdmin lever i auth-guard.ts (delas med user-content.ts och
+// admin-users.ts, se den filens kommentar för varför den inte bara
+// exporteras härifrån).
 
 // Scheduled trigger (daily at 2 AM)
 export const ingestRSSFeeds = functions

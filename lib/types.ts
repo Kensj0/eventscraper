@@ -23,6 +23,49 @@ export interface EventFormData {
   startTime: string;
   location: string;
   category: string;
+  sourceUrl: string;
+}
+
+/** Ett publikt inskickat event, väntar på admin-granskning (app/lagg-till-event). */
+export interface EventSubmission {
+  id: string;
+  title: string;
+  description: string;
+  startTime: Date;
+  location: string;
+  category: string;
+  sourceUrl: string;
+  submittedBy: string;
+  submittedByEmail: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: Date;
+}
+
+/** En publikt inskickad "eventlänk" (functions/src/candidate-sources.ts,
+ * type:'anvandarinskickad'), som lästs av adminpanelens EventLinkQueue. */
+export interface EventLinkSubmission {
+  id: string;
+  name: string;
+  url: string;
+  region: string;
+  submittedBy: string;
+  submittedByEmail: string;
+  status: 'new' | 'ready-to-ingest' | 'verified' | 'failed';
+  verifiedMethod?: string;
+  feedUrl?: string;
+  createdAt: Date;
+}
+
+/** En källa i "sources" så som adminpanelens SourceManager listar den. */
+export interface SourceListItem {
+  id: string;
+  name: string;
+  url: string;
+  region: string;
+  method: string;
+  enabled: boolean;
+  submittedBy?: string;
+  submittedByEmail?: string;
 }
 
 export interface SiteConfig {
