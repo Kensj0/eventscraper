@@ -34,7 +34,12 @@ export type CandidateCategory =
   | 'retreat-center'
   | 'yoga'
   | 'gym'
-  | 'halsohem';
+  | 'halsohem'
+  // En besökare la in sin egen hemsidas eventsida via app/lagg-till-event —
+  // skiljs ut från källupptäcktens egna kategorier ovan så adminpanelens
+  // EventLinkQueue vet vilka candidate-sources som väntar på just den typen
+  // av granskning (submittedBy är också satt för dessa, se nedan).
+  | 'anvandarinskickad';
 
 export type CandidateStatus = 'new' | 'ready-to-ingest' | 'verified' | 'failed';
 
@@ -56,6 +61,13 @@ export interface CandidateSource {
     [key: string]: string | undefined;
   };
   discoveredFrom?: string;
+  // Satta bara för type:'anvandarinskickad' — vilken publik användare (uid +
+  // e-post för admin-UI:t att visa) som skickade in länken via
+  // app/lagg-till-event. firestore.rules kräver att submittedBy matchar
+  // request.auth.uid vid create, så det går inte att spoofa en annan
+  // användares inskick.
+  submittedBy?: string;
+  submittedByEmail?: string;
   createdAt: admin.firestore.Timestamp;
   lastVerified?: admin.firestore.Timestamp;
   status: CandidateStatus;

@@ -189,6 +189,15 @@ export default function Home() {
           />
         </div>
 
+        <div className="mb-4 flex justify-end">
+          <a
+            href="/lagg-till-event"
+            className="rounded-lg bg-[#B5312F] px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-[#933B36]"
+          >
+            + Lägg till event
+          </a>
+        </div>
+
         <EventFilters
           categories={categories}
           selectedCategory={selectedCategory}

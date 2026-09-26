@@ -25,6 +25,13 @@ export interface SourceConfig {
     ownerId?: string;
     [key: string]: string | undefined;
   };
+  // Satta när källan kom från en godkänd "eventlänk" (app/lagg-till-event →
+  // candidate-sources type:'anvandarinskickad' → admin godkänner i
+  // EventLinkQueue) istället för källupptäckten eller seed-sources.ts.
+  // Adminpanelens SourceManager visar dessa så det syns vilka källor som
+  // kommer från en besökare.
+  submittedBy?: string;
+  submittedByEmail?: string;
 }
 
 function db() {
