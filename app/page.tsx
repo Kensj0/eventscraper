@@ -1,13 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { db } from '@/lib/firebase';
+import { db, functions } from '@/lib/firebase';
 import { collection, doc, query, where, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
 import EventCard from './components/EventCard';
 import EventFilters from './components/EventFilters';
 import SearchBar from './components/SearchBar';
 import HeroBanner from './components/HeroBanner';
+import EditEventModal from './components/EditEventModal';
 import { DALARNA_MUNICIPALITIES, isMunicipality, matchesMunicipality } from '@/lib/dalarna';
+import { useAdminUser } from '@/lib/useAdminUser';
 import type { Event, SiteConfig } from '@/lib/types';
 import { DEFAULT_SITE_CONFIG } from '@/lib/types';
 
@@ -32,6 +35,25 @@ export default function Home() {
   const [searchText, setSearchText] = useState('');
   const [city, setCity] = useState('');
   const [siteConfig, setSiteConfig] = useState<SiteConfig>(DEFAULT_SITE_CONFIG);
+  const { isAdmin } = useAdminUser();
+  const [editingEvent, setEditingEvent] = useState<Event | null>(null);
+  const [deletingEvent, setDeletingEvent] = useState<Event | null>(null);
+  const [deleteError, setDeleteError] = useState('');
+  const [deleting, setDeleting] = useState(false);
+
+  const confirmDelete = async () => {
+    if (!deletingEvent) return;
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      await httpsCallable(functions, 'deleteEvent')({ eventId: deletingEvent.id });
+      setDeletingEvent(null);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Kunde inte ta bort eventet.');
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   useEffect(() => {
     return onSnapshot(doc(db, 'config', 'site'), (snap) => {
@@ -219,17 +241,63 @@ export default function Home() {
         ) : (
           <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
             {filteredEvents.map((event) => (
-              <EventCard key={event.id} event={event} />
+              <EventCard
+                key={event.id}
+                event={event}
+                onEdit={isAdmin ? setEditingEvent : undefined}
+                onDelete={isAdmin ? setDeletingEvent : undefined}
+              />
             ))}
           </div>
         )}
 
         <div className="pt-10 text-right">
-          <a href="/admin" className="text-xs text-gray-300 transition-colors hover:text-gray-400">
-            Logga in
-          </a>
+          {isAdmin ? (
+            <a href="/admin" className="text-xs text-gray-400 transition-colors hover:text-[#B5312F]">
+              Adminpanel →
+            </a>
+          ) : (
+            <a href="/admin" className="text-xs text-gray-300 transition-colors hover:text-gray-400">
+              Logga in
+            </a>
+          )}
         </div>
       </div>
+
+      {editingEvent && (
+        <EditEventModal
+          event={editingEvent}
+          onClose={() => setEditingEvent(null)}
+          onSaved={() => setEditingEvent(null)}
+        />
+      )}
+
+      {deletingEvent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-lg">
+            <h3 className="font-bold text-gray-900">Ta bort &quot;{deletingEvent.title}&quot;?</h3>
+            <p className="mt-2 text-sm text-gray-600">Eventet tas bort permanent från sajten.</p>
+            {deleteError && <p className="mt-2 text-sm text-red-600">{deleteError}</p>}
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setDeletingEvent(null)}
+                className="rounded-lg border border-gray-300 px-4 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                Avbryt
+              </button>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                disabled={deleting}
+                className="rounded-lg bg-red-600 px-4 py-1.5 text-sm font-semibold text-white hover:bg-red-700 disabled:opacity-50"
+              >
+                {deleting ? 'Tar bort…' : 'Ta bort'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

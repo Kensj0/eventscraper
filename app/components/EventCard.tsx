@@ -1,7 +1,13 @@
-import { Calendar, MapPin } from 'lucide-react';
+import { Calendar, MapPin, Pencil, Trash2 } from 'lucide-react';
 import type { Event } from '@/lib/types';
 
-export default function EventCard({ event }: { event: Event }) {
+interface EventCardProps {
+  event: Event;
+  onEdit?: (event: Event) => void;
+  onDelete?: (event: Event) => void;
+}
+
+export default function EventCard({ event, onEdit, onDelete }: EventCardProps) {
   const formatDate = (date: Date, timeKnown: boolean) => {
     const days = ['SÖN', 'MÅN', 'TIS', 'ONS', 'TOR', 'FRE', 'LÖR'];
     const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAJ', 'JUN', 'JUL', 'AUG', 'SEP', 'OKT', 'NOV', 'DEC'];
@@ -29,6 +35,39 @@ export default function EventCard({ event }: { event: Event }) {
       rel="noopener noreferrer"
       className="group flex h-full flex-col overflow-hidden rounded-lg bg-white shadow-md transition-shadow hover:shadow-lg"
     >
+      {(onEdit || onDelete) && (
+        <div className="flex justify-end gap-1 border-b border-gray-100 bg-gray-50 px-2 py-1">
+          {onEdit && (
+            <button
+              type="button"
+              title="Redigera"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onEdit(event);
+              }}
+              className="rounded p-1 text-gray-500 transition-colors hover:bg-gray-200 hover:text-[#B5312F]"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              title="Ta bort"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onDelete(event);
+              }}
+              className="rounded p-1 text-gray-500 transition-colors hover:bg-gray-200 hover:text-red-600"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
+      )}
+
       <div className="border-l-4 border-[#B5312F] p-4 flex flex-col h-full">
         <div className="mb-3 flex items-start justify-between">
           <div className="flex items-center gap-2 text-sm font-semibold text-gray-700">

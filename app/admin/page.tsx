@@ -85,6 +85,9 @@ function Dashboard({ user }: { user: User }) {
       <header className="bg-white shadow-sm">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4 sm:px-6">
           <div>
+            <a href="/" className="text-xs text-gray-500 transition-colors hover:text-[#B5312F]">
+              ← Till startsidan
+            </a>
             <h1 className="text-lg font-bold text-gray-900">EventScraper-administration</h1>
             <p className="text-sm text-gray-500">{user.email}</p>
           </div>
