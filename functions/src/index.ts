@@ -27,6 +27,7 @@ const db = admin.firestore();
 // deploybar funktion når topnivå-exports i index.ts).
 export * from './user-content';
 export * from './admin-users';
+export * from './admin-events';
 
 interface AIResponse {
   is_event: boolean;
