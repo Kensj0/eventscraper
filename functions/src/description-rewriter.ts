@@ -28,7 +28,7 @@ Svara ENDAST med den omskrivna texten, ingen extra formatering eller citattecken
     if (process.env.ANTHROPIC_API_KEY) {
       const response = await axios.post(
         'https://api.anthropic.com/v1/messages',
-        { model: 'claude-haiku-4-5-20251001', max_tokens: 150, messages: [{ role: 'user', content: prompt }] },
+        { model: 'claude-haiku-5-5', max_tokens: 150, messages: [{ role: 'user', content: prompt }] },
         {
           headers: {
             'x-api-key': apiKey,

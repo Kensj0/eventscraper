@@ -139,7 +139,7 @@ Respond ONLY with valid JSON (no markdown, no code blocks):
       const response = await axios.post(
         'https://api.anthropic.com/v1/messages',
         {
-          model: 'claude-haiku-4-5-20251001',
+          model: 'claude-haiku-5-5',
           max_tokens: 200,
           messages: [{ role: 'user', content: prompt }],
         },
